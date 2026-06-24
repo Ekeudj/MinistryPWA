@@ -1,8 +1,9 @@
 from app.config import settings
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File   
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.video_engine import generate_sermon_video
+import os
 
 #We intiliaze the server.
 
@@ -59,8 +60,8 @@ async def serve_favicon():
         from fastapi.responses import Response
         return Response(status_code=204)
 
-@app.post("/api/upload-audio"):
-async def upload_sermon_audio(file: Upload = File(...)):
+@app.post("/api/upload-audio")
+async def upload_sermon_audio(file: UploadFile = File(...)):
     """
     Receives an audio file from the phone/frontend browser, 
     saves it to disk, and passes it to the MoviePy engine.
@@ -100,12 +101,6 @@ async def upload_sermon_audio(file: Upload = File(...)):
     except Exception as e:
         print(f"[API] Error handling media upload: {str(e)}")
         return {"status": "error", "message": f"Server processing failed: {str(e)}"}
-
-
-
-
-
-
 
 
 # Heath check for when in deployment to keep cloud tracking systems updated
