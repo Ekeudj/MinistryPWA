@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>HerGlory CMS</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="/static/manifest.json" />
   <meta name="theme-color" content="#0d0f14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,14 +21,10 @@
 
 <div id="app">
 
-  <!-- ══════════════════════════════════════
-       SCREEN 1 — LOGIN
-  ══════════════════════════════════════ -->
   <div id="screen-login" class="screen active">
     <div class="login-bg-blur"></div>
 
     <div class="login-container">
-      <!-- Brand — actual ministry logo -->
       <div class="login-brand">
         <img
           class="brand-logo"
@@ -42,7 +37,6 @@
         />
       </div>
 
-      <!-- Login card -->
       <div class="login-card">
         <h2 class="login-heading">Welcome back</h2>
         <p class="login-desc">Sign in with your Ministry account</p>
@@ -76,13 +70,7 @@
     </div>
   </div>
 
-
-  <!-- ══════════════════════════════════════
-       SCREEN 2 — DASHBOARD
-  ══════════════════════════════════════ -->
   <div id="screen-dashboard" class="screen">
-
-    <!-- Top bar -->
     <header class="topbar">
       <div class="topbar-left">
         <div class="topbar-avatar" id="topbar-avatar">ML</div>
@@ -100,8 +88,6 @@
       </button>
     </header>
 
-    <!-- Install App banner — shown only when the browser supports install
-         and the app isn't already installed (controlled in app.js) -->
     <div class="install-banner" id="install-banner" hidden>
       <div class="install-banner-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -115,14 +101,11 @@
     </div>
 
     <div class="dash-scroll">
-
-      <!-- Title -->
       <div class="dash-title-row">
         <h2 class="dash-title">Dashboard</h2>
         <span class="dash-date" id="dash-date"></span>
       </div>
 
-      <!-- Stats row -->
       <div class="stats-row">
         <div class="stat-card">
           <span class="stat-num" id="stat-media">0</span>
@@ -134,7 +117,6 @@
         </div>
       </div>
 
-      <!-- New Post CTA -->
       <button class="new-post-btn" id="go-new-post">
         <div class="new-post-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -146,7 +128,6 @@
         <svg class="new-post-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
 
-      <!-- Recent posts -->
       <div class="section-hd">
         <span class="section-title">Recent Posts</span>
       </div>
@@ -157,10 +138,8 @@
           <p>No posts yet.<br>Hit <strong>New Post</strong> to get started.</p>
         </div>
       </div>
+    </div>
 
-    </div><!-- /dash-scroll -->
-
-    <!-- Bottom nav -->
     <nav class="bottom-nav">
       <button class="nav-btn active" data-nav="dashboard">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -171,28 +150,19 @@
         <span>Post</span>
       </button>
     </nav>
+  </div>
 
-  </div><!-- /screen-dashboard -->
-
-
-  <!-- ══════════════════════════════════════
-       SCREEN 3 — NEW POST (Configure)
-  ══════════════════════════════════════ -->
   <div id="screen-newpost" class="screen">
-
     <header class="inner-topbar">
       <button class="back-btn" id="back-from-post" aria-label="Go back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <h2 class="inner-title">New Post — Configure Destination</h2>
-      <div style="width:36px"></div><!-- spacer -->
+      <h2 class="inner-title">New Post — Destinations</h2>
+      <div style="width:36px"></div>
     </header>
 
     <div class="newpost-scroll">
-
-      <!-- Media drop zone -->
       <div class="drop-zone" id="drop-zone">
-        <!-- Clickable label wraps the hidden input — this IS the trigger -->
         <label class="drop-label-wrap" id="drop-label-wrap" for="media-input">
           <div class="drop-placeholder" id="drop-placeholder">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -201,7 +171,6 @@
           <input type="file" id="media-input" accept="image/*,video/*,audio/*" class="hidden-input" />
         </label>
 
-        <!-- Media preview (hidden until file chosen) — sibling, NOT inside the label -->
         <div class="media-preview" id="media-preview" hidden>
           <img id="preview-img" src="" alt="Preview" hidden />
           <video id="preview-vid" src="" controls playsinline hidden></video>
@@ -217,41 +186,35 @@
         </div>
       </div>
 
-      <!-- Audio note (shown only when audio selected) -->
       <p class="audio-note" id="audio-note" hidden>
-        ℹ️ Audio will be converted into a video (waveform + your audio) before posting, since TikTok, Instagram, YouTube and Facebook don't accept raw audio posts.
+        ℹ️ Audio will be converted into a video asset before posting.
       </p>
 
-      <!-- Title -->
       <div class="field mt16">
         <label class="field-label" for="post-title">Title</label>
-        <input id="post-title" class="field-input" type="text" placeholder="e.g. Sermon — May 24 · Grace.mp4" />
+        <input id="post-title" class="field-input" type="text" placeholder="e.g. Sermon Title" />
       </div>
 
-      <!-- Caption -->
       <div class="field">
         <label class="field-label" for="post-caption">Description / Caption</label>
-        <textarea id="post-caption" class="field-input field-textarea" placeholder="Write a caption for your post…" rows="3"></textarea>
+        <textarea id="post-caption" class="field-input field-textarea" placeholder="Write a caption..." rows="3"></textarea>
       </div>
 
-      <!-- Platform toggles -->
       <div class="section-hd">
         <span class="section-title">Destinations</span>
-        <span class="section-sub">Toggle platforms to post to</span>
       </div>
 
       <div class="platforms-grid">
-
-        <!-- TikTok -->
         <div class="platform-card" data-platform="tiktok">
           <div class="platform-left">
             <div class="platform-logo tiktok-logo">
-              <!-- TikTok icon SVG -->
               <svg viewBox="0 0 32 32" width="22" height="22" fill="currentColor"><path d="M21.2 2h-4.4v19.4a4.8 4.8 0 0 1-4.8 4.6 4.8 4.8 0 0 1-4.8-4.8 4.8 4.8 0 0 1 4.8-4.8c.46 0 .9.06 1.32.18V12.1a9.24 9.24 0 0 0-1.32-.1A9.2 9.2 0 0 0 2.8 21.2 9.2 9.2 0 0 0 12 30.4a9.2 9.2 0 0 0 9.2-9.2V11.1a13.5 13.5 0 0 0 8 2.6V9.28A9.24 9.24 0 0 1 21.2 2z"/></svg>
             </div>
             <div class="platform-info">
               <span class="platform-name">TikTok</span>
               <span class="platform-handle" id="tt-handle">Ministry Official</span>
+              <a href="http://127.0.0.1:8000/api/auth/tiktok" id="tt-connect-btn" style="font-size: 11px; color: #0070f3; text-decoration: underline; display: none; margin-top: 2px; cursor: pointer;">Connect Account</a>
+              <span class="platform-status-label" id="tt-status" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">Checking link...</span>
             </div>
           </div>
           <label class="toggle" aria-label="Toggle TikTok">
@@ -260,7 +223,6 @@
           </label>
         </div>
 
-        <!-- Instagram -->
         <div class="platform-card" data-platform="instagram">
           <div class="platform-left">
             <div class="platform-logo insta-logo">
@@ -277,7 +239,6 @@
           </label>
         </div>
 
-        <!-- YouTube -->
         <div class="platform-card" data-platform="youtube">
           <div class="platform-left">
             <div class="platform-logo yt-logo">
@@ -295,11 +256,9 @@
           </label>
         </div>
 
-        <!-- YouTube Shorts -->
         <div class="platform-card" data-platform="ytshorts">
           <div class="platform-left">
             <div class="platform-logo ytshorts-logo">
-              <!-- Shorts "play" badge style -->
               <svg viewBox="0 0 32 32" width="22" height="22" fill="currentColor"><path d="M29.4 8.8a3.68 3.68 0 0 0-2.6-2.6C24.6 5.6 16 5.6 16 5.6s-8.6 0-10.8.6a3.68 3.68 0 0 0-2.6 2.6C2 11 2 16 2 16s0 5 .6 7.2a3.68 3.68 0 0 0 2.6 2.6C7.4 26.4 16 26.4 16 26.4s8.6 0 10.8-.6a3.68 3.68 0 0 0 2.6-2.6C30 21 30 16 30 16s0-5-.6-7.2zm-16.4 9.6V13.6l7.2 2.4-7.2 2.4z"/><rect x="0" y="0" width="12" height="12" rx="3" fill="#ff0000"/><text x="6" y="9" text-anchor="middle" fill="white" font-size="8" font-weight="bold">S</text></svg>
             </div>
             <div class="platform-info">
@@ -315,7 +274,6 @@
           </label>
         </div>
 
-        <!-- Facebook -->
         <div class="platform-card" data-platform="facebook">
           <div class="platform-left">
             <div class="platform-logo fb-logo">
@@ -331,24 +289,19 @@
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
+      </div>
 
-      </div><!-- /platforms-grid -->
-
-      <!-- Photo-mode notice -->
       <p class="mode-note" id="photo-mode-note" hidden>
-        📌 Photo selected — YouTube &amp; YouTube Shorts are disabled (they don't accept standalone photo posts).
+        📌 Photo selected — YouTube &amp; YouTube Shorts are disabled.
       </p>
 
-      <!-- Post Now button -->
       <div id="post-error" class="error-banner" hidden>Please fill in a title and select at least one platform.</div>
       <button class="btn-primary post-now-btn" id="post-now-btn">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         Post Now
       </button>
+    </div>
 
-    </div><!-- /newpost-scroll -->
-
-    <!-- Bottom nav (same as dashboard) -->
     <nav class="bottom-nav">
       <button class="nav-btn" data-nav="dashboard" id="nav-dash-from-post">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -359,16 +312,10 @@
         <span>Post</span>
       </button>
     </nav>
+  </div>
 
-  </div><!-- /screen-newpost -->
-
-
-  <!-- ══════════════════════════════════════
-       SCREEN 4 — POSTING PROGRESS
-  ══════════════════════════════════════ -->
   <div id="screen-posting" class="screen">
     <div class="posting-wrap">
-
       <div class="posting-media-thumb" id="posting-thumb">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       </div>
@@ -376,12 +323,8 @@
       <h3 class="posting-title" id="posting-title-display">Posting…</h3>
       <p class="posting-sub">Cross-posting to your platforms</p>
 
-      <!-- Per-platform status rows -->
-      <div class="posting-platforms" id="posting-platforms">
-        <!-- Injected by JS -->
-      </div>
+      <div class="posting-platforms" id="posting-platforms"></div>
 
-      <!-- Overall loader / done -->
       <div class="posting-loader" id="posting-loader">
         <div class="spinner"></div>
         <span>Uploading…</span>
@@ -394,11 +337,10 @@
         <h3 class="done-title">Cross-Post Successful!</h3>
         <button class="btn-primary" id="go-dashboard-btn">Go to Dashboard</button>
       </div>
-
     </div>
-  </div><!-- /screen-posting -->
+  </div>
 
-</div><!-- /app -->
+</div>
 
 <script src="/static/app.js"></script>
 </body>

@@ -869,7 +869,7 @@ textarea { resize: vertical; }
 /* When a card is disabled (photo selected & platform unsupported) */
 .platform-card.disabled {
   opacity: .45;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .platform-card.disabled .platform-note-disabled {
   display: block;

@@ -24,11 +24,14 @@ let state = {
   mediaFile: null,
   mediaType: null,
   mediaURL: null,
+  tiktokConnected: false,
 };
 
 /* ══════════════════════════════════════════════════
    DOM REFS
 ══════════════════════════════════════════════════ */
+const ttStatus = document.getElementById('tt-status');
+const ttConnectBtn = document.getElementById('tt-connect-btn');
 // Screens
 const screenLogin = document.getElementById('screen-login');
 const screenDashboard = document.getElementById('screen-dashboard');
@@ -102,7 +105,7 @@ pwEye.addEventListener('click', () => {
   inpPass.type = inpPass.type === 'password' ? 'text' : 'password';
 });
 
-function handleLogin() {
+async function handleLogin() {
   const email = inpEmail.value.trim();
   const pass = inpPass.value;
 
@@ -111,8 +114,10 @@ function handleLogin() {
     state.loggedIn = true;
     state.user = { name: 'Pastor Mrs. Lubega', email };
     topbarUser.textContent = state.user.name;
-    updateDashboard();
+    await updateDashboard();
     switchScreen('screen-dashboard');
+    // Check connections right after landing on the dashboard
+    await checkPlatformConnections();
   } else {
     loginErr.removeAttribute('hidden');
     loginBtn.style.transition = 'none';
@@ -138,7 +143,7 @@ topbarLogout.addEventListener('click', () => {
 /* ══════════════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════════════ */
-function updateDashboard() {
+async function updateDashboard() {
   dashDate.textContent = new Date().toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric'
   });
@@ -191,17 +196,61 @@ function renderRecentPosts() {
   });
 }
 
-goNewPost.addEventListener('click', () => {
+goNewPost.addEventListener('click', async () => {
   resetNewPostForm();
   switchScreen('screen-newpost');
   setNavActive(screenNewpost, 'new-post');
+  await checkPlatformConnections();
 });
 
-navPostBtn.addEventListener('click', () => {
+navPostBtn.addEventListener('click', async () => {
   resetNewPostForm();
   switchScreen('screen-newpost');
   setNavActive(screenNewpost, 'new-post');
+  await checkPlatformConnections();
 });
+
+async function checkPlatformConnections() {
+  const tiktokCard = document.querySelector('.platform-card[data-platform="tiktok"]');
+  const ttStatus = document.getElementById('tt-status');
+  const ttConnectBtn = document.getElementById('tt-connect-btn');
+
+  let isConnected = false;
+
+  try {
+    const response = await fetch('/api/auth/status/tiktok');
+    if (response.ok) {
+      const data = await response.json();
+      isConnected = data.connected;
+      state.tiktokConnected = isConnected;
+    } else {
+      isConnected = false;
+    }
+  } catch (error) {
+    console.error("Could not fetch verification status from server:", error);
+    isConnected = false;
+  }
+
+  if (tiktokCard) {
+    const toggle = tiktokCard.querySelector('.platform-toggle');
+
+    if (!isConnected) {
+      tiktokCard.classList.add('disabled');
+      if (toggle) {
+        toggle.checked = false;
+        toggle.disabled = true;
+      }
+      if (ttStatus) ttStatus.textContent = "Account Not Linked";
+      if (ttConnectBtn) ttConnectBtn.style.display = "block";
+
+    } else {
+      tiktokCard.classList.remove('disabled');
+      if (toggle) toggle.disabled = false;
+      if (ttStatus) ttStatus.textContent = "Connected";
+      if (ttConnectBtn) ttConnectBtn.style.display = "none";
+    }
+  }
+}
 
 /* ══════════════════════════════════════════════════
    NEW POST — MEDIA SELECTION
@@ -233,7 +282,7 @@ function loadMediaFile(file) {
 
   const isVideo = file.type.startsWith('video/');
   const isImage = file.type.startsWith('image/');
-  const isAudio = file.type.startsWith('audio/');
+  const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac)$/i.test(file.name);
 
   if (!isVideo && !isImage && !isAudio) {
     alert('Please select a photo (JPG, PNG), video (MP4, MOV) or audio file (MP3, WAV).');
@@ -308,11 +357,16 @@ function applyMediaTypeRules() {
 
     if (isPhoto && disabledForPhoto) {
       card.classList.add('disabled');
-      toggle.checked = false;
+      if (toggle) toggle.checked = false;
     } else {
-      card.classList.remove('disabled');
+      // Keep TikTok disabled if it isn't connected yet
+      if (key === 'tiktok' && !state.tiktokConnected) {
+        card.classList.add('disabled');
+      } else {
+        card.classList.remove('disabled');
+      }
     }
-    card.classList.toggle('enabled', toggle.checked && !card.classList.contains('disabled'));
+    if (toggle) card.classList.toggle('enabled', toggle.checked && !card.classList.contains('disabled'));
   });
 
   photoModeNote.toggleAttribute('hidden', !isPhoto);
@@ -331,7 +385,10 @@ platformToggles.forEach(toggle => {
     }
     card.classList.toggle('enabled', toggle.checked);
   });
-  if (toggle.checked) toggle.closest('.platform-card').classList.add('enabled');
+  if (toggle.checked) {
+    const card = toggle.closest('.platform-card');
+    if (card && !card.classList.contains('disabled')) card.classList.add('enabled');
+  }
 });
 
 function getSelectedPlatforms() {
@@ -369,15 +426,13 @@ async function handlePostNow() {
 
   let workingTitle = title;
 
-  // If file is audio, handle backend video rendering step first
   if (state.mediaType === 'audio') {
     switchScreen('screen-posting');
 
-    // Set up rendering status interface
     postingDone.setAttribute('hidden', '');
     postingLoader.removeAttribute('hidden');
     postingTitleDisplay.textContent = 'Converting audio to video asset...';
-    postingThumb.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+    postingThumb.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
     postingPlatforms.innerHTML = `
       <div class="posting-row">
@@ -419,14 +474,13 @@ async function handlePostNow() {
     switchScreen('screen-posting');
   }
 
-  // Proceed to platform distribution pipeline step
   startPosting(workingTitle, platforms);
 }
 
 /* ══════════════════════════════════════════════════
-   POSTING SCREEN — SIMULATED UPLOAD PROGRESS
+   POSTING SCREEN — REAL & SIMULATED PIPELINES
 ══════════════════════════════════════════════════ */
-function startPosting(title, platforms) {
+async function startPosting(title, platforms) {
   postingDone.setAttribute('hidden', '');
   postingLoader.removeAttribute('hidden');
   postingPlatforms.innerHTML = '';
@@ -447,32 +501,50 @@ function startPosting(title, platforms) {
     rowMap[p] = row;
   });
 
-  let completed = 0;
-  platforms.forEach((p, i) => {
-    const delay = 1200 + i * 900 + Math.random() * 500;
-    setTimeout(() => {
-      const success = Math.random() > 0.1;
-      updatePostingRow(rowMap[p], success ? 'complete' : 'failed');
-      completed++;
+  // Execute pipelines sequentially or in parallel
+  for (const p of platforms) {
+    if (p === 'tiktok') {
+      try {
+        // Trigger the real FastAPI chunk-upload execution endpoint
+        const response = await fetch('/api/test-publish/tiktok', {
+          method: 'POST'
+        });
+        const result = await response.json();
 
-      if (completed === platforms.length) {
-        setTimeout(() => {
-          postingLoader.setAttribute('hidden', '');
-          postingDone.removeAttribute('hidden');
-
-          state.posts.push({
-            id: Date.now(),
-            title,
-            caption: postCaption.value.trim(),
-            platforms,
-            mediaType: state.mediaType || 'photo',
-            mediaURL: state.mediaURL,
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          });
-        }, 600);
+        if (response.ok && result.status === 'success') {
+          updatePostingRow(rowMap[p], 'complete');
+        } else {
+          updatePostingRow(rowMap[p], 'failed');
+          alert(`TikTok Distribution Interrupted: ${result.error || 'Server Processing Error'}`);
+        }
+      } catch (err) {
+        updatePostingRow(rowMap[p], 'failed');
+        alert(`Failed to establish route connection to backend: ${err.message}`);
       }
-    }, delay);
-  });
+    } else {
+      // Temporary sandbox fallback for other modules (Instagram, Facebook, YouTube)
+      const delay = 1200 + Math.random() * 800;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      const success = Math.random() > 0.05;
+      updatePostingRow(rowMap[p], success ? 'complete' : 'failed');
+    }
+  }
+
+  // All targets processed
+  setTimeout(() => {
+    postingLoader.setAttribute('hidden', '');
+    postingDone.removeAttribute('hidden');
+
+    state.posts.push({
+      id: Date.now(),
+      title,
+      caption: postCaption.value.trim(),
+      platforms,
+      mediaType: state.mediaType || 'photo',
+      mediaURL: state.mediaURL,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    });
+  }, 600);
 }
 
 function buildPostingRow(platform, status) {
@@ -492,6 +564,7 @@ function buildPostingRow(platform, status) {
 
 function updatePostingRow(row, status) {
   const statusEl = row.querySelector('.posting-status');
+  if (!statusEl) return;
   if (status === 'complete') {
     statusEl.className = 'posting-status status-complete';
     statusEl.innerHTML = '✓ Complete';
@@ -588,7 +661,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   const dismissed = sessionStorage.getItem('installBannerDismissed');
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
-  if (!dismissed && !isStandalone) {
+  if (!dismissed && !isStandalone && installBanner) {
     installBanner.removeAttribute('hidden');
   }
 });
@@ -597,7 +670,7 @@ installBtn?.addEventListener('click', async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  installBanner.setAttribute('hidden', '');
+  if (installBanner) installBanner.setAttribute('hidden', '');
   deferredInstallPrompt = null;
   if (outcome === 'accepted') {
     sessionStorage.setItem('installBannerDismissed', 'true');
@@ -605,12 +678,12 @@ installBtn?.addEventListener('click', async () => {
 });
 
 installDismiss?.addEventListener('click', () => {
-  installBanner.setAttribute('hidden', '');
+  if (installBanner) installBanner.setAttribute('hidden', '');
   sessionStorage.setItem('installBannerDismissed', 'true');
 });
 
 window.addEventListener('appinstalled', () => {
-  installBanner.setAttribute('hidden', '');
+  if (installBanner) installBanner.setAttribute('hidden', '');
   sessionStorage.setItem('installBannerDismissed', 'true');
 });
 
@@ -621,6 +694,39 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ══════════════════════════════════════════════════
-   INIT
+   INIT (URL INTERCEPTION MODULE)
 ══════════════════════════════════════════════════ */
-switchScreen('screen-login');
+(async function initApp() {
+  const urlParams = new URLSearchParams(window.location.search);
+
+  if (urlParams.get('tiktok_connected') === 'true') {
+    // 1. Manually restore session state objects to bypass authentication wall
+    state.loggedIn = true;
+    state.tiktokConnected = true;
+    state.user = { name: 'Pastor Mrs. Lubega', email: DEMO_EMAIL };
+
+    const userDisplay = document.getElementById('topbar-user');
+    if (userDisplay) userDisplay.textContent = state.user.name;
+
+    // 2. Clear out container tables and run validation steps
+    await updateDashboard();
+
+    // 3. Drop layout focus straight into destination configuration panel
+    switchScreen('screen-newpost');
+    const screenNewpostEl = document.getElementById('screen-newpost');
+    if (screenNewpostEl) {
+      screenNewpostEl.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nav === 'new-post');
+      });
+    }
+    await checkPlatformConnections();
+
+    // 4. Safely purge URL parameter layout arguments from memory context
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    alert("TikTok Account Successfully Linked!");
+  } else {
+    // Standard initialization sequence
+    switchScreen('screen-login');
+  }
+})();
