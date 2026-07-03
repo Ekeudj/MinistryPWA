@@ -1,22 +1,13 @@
 /**
  * HerGlory Media CMS — app.js
  * Pure Vanilla JS. No frameworks.
- *
- * Flow:
- * Login → Dashboard → New Post (configure) → Posting progress → Dashboard
  */
 
 'use strict';
 
-/* ══════════════════════════════════════════════════
-   CREDENTIALS (hardcoded for v1 demo)
-══════════════════════════════════════════════════ */
 const DEMO_EMAIL = 'admin@herglory.org';
 const DEMO_PASSWORD = 'glory2026';
 
-/* ══════════════════════════════════════════════════
-   IN-MEMORY STATE
-══════════════════════════════════════════════════ */
 let state = {
   loggedIn: false,
   user: null,
@@ -25,27 +16,26 @@ let state = {
   mediaType: null,
   mediaURL: null,
   tiktokConnected: false,
+  youtubeConnected: false,
 };
 
-/* ══════════════════════════════════════════════════
-   DOM REFS
-══════════════════════════════════════════════════ */
+// DOM REFS
 const ttStatus = document.getElementById('tt-status');
 const ttConnectBtn = document.getElementById('tt-connect-btn');
-// Screens
+const ytStatus = document.getElementById('yt-status');
+const ytConnectBtn = document.getElementById('yt-connect-btn');
+
 const screenLogin = document.getElementById('screen-login');
 const screenDashboard = document.getElementById('screen-dashboard');
 const screenNewpost = document.getElementById('screen-newpost');
 const screenPosting = document.getElementById('screen-posting');
 
-// Login
 const inpEmail = document.getElementById('inp-email');
 const inpPass = document.getElementById('inp-pass');
 const loginBtn = document.getElementById('login-btn');
 const loginErr = document.getElementById('login-err');
 const pwEye = document.getElementById('pw-eye');
 
-// Dashboard
 const topbarLogout = document.getElementById('topbar-logout');
 const topbarUser = document.getElementById('topbar-user');
 const goNewPost = document.getElementById('go-new-post');
@@ -55,7 +45,6 @@ const recentList = document.getElementById('recent-list');
 const emptyState = document.getElementById('empty-state');
 const navPostBtn = document.getElementById('nav-post-btn');
 
-// New post
 const backFromPost = document.getElementById('back-from-post');
 const dropZone = document.getElementById('drop-zone');
 const dropLabelWrap = document.getElementById('drop-label-wrap');
@@ -77,7 +66,6 @@ const postNowBtn = document.getElementById('post-now-btn');
 const postError = document.getElementById('post-error');
 const navDashFromPost = document.getElementById('nav-dash-from-post');
 
-// Posting screen
 const postingThumb = document.getElementById('posting-thumb');
 const postingTitleDisplay = document.getElementById('posting-title-display');
 const postingPlatforms = document.getElementById('posting-platforms');
@@ -85,17 +73,12 @@ const postingLoader = document.getElementById('posting-loader');
 const postingDone = document.getElementById('posting-done');
 const goDashboardBtn = document.getElementById('go-dashboard-btn');
 
-/* ══════════════════════════════════════════════════
-   SCREEN ROUTER
-══════════════════════════════════════════════════ */
 function switchScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  const target = document.getElementById(id);
+  if (target) target.classList.add('active');
 }
 
-/* ══════════════════════════════════════════════════
-   LOGIN
-══════════════════════════════════════════════════ */
 loginBtn.addEventListener('click', handleLogin);
 [inpEmail, inpPass].forEach(el => el.addEventListener('keydown', e => {
   if (e.key === 'Enter') handleLogin();
@@ -113,10 +96,9 @@ async function handleLogin() {
     loginErr.setAttribute('hidden', '');
     state.loggedIn = true;
     state.user = { name: 'Pastor Mrs. Lubega', email };
-    topbarUser.textContent = state.user.name;
+    if (topbarUser) topbarUser.textContent = state.user.name;
     await updateDashboard();
     switchScreen('screen-dashboard');
-    // Check connections right after landing on the dashboard
     await checkPlatformConnections();
   } else {
     loginErr.removeAttribute('hidden');
@@ -129,9 +111,6 @@ async function handleLogin() {
   }
 }
 
-/* ══════════════════════════════════════════════════
-   LOGOUT
-══════════════════════════════════════════════════ */
 topbarLogout.addEventListener('click', () => {
   state.loggedIn = false;
   state.user = null;
@@ -140,28 +119,28 @@ topbarLogout.addEventListener('click', () => {
   switchScreen('screen-login');
 });
 
-/* ══════════════════════════════════════════════════
-   DASHBOARD
-══════════════════════════════════════════════════ */
 async function updateDashboard() {
-  dashDate.textContent = new Date().toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric'
-  });
-  statMedia.textContent = state.posts.length;
+  if (dashDate) {
+    dashDate.textContent = new Date().toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+  }
+  if (statMedia) statMedia.textContent = state.posts.length;
   renderRecentPosts();
 }
 
 function renderRecentPosts() {
+  if (!recentList) return;
   Array.from(recentList.children).forEach(c => {
     if (c.id !== 'empty-state') c.remove();
   });
 
   if (state.posts.length === 0) {
-    emptyState.removeAttribute('hidden');
+    if (emptyState) emptyState.removeAttribute('hidden');
     return;
   }
 
-  emptyState.setAttribute('hidden', '');
+  if (emptyState) emptyState.setAttribute('hidden', '');
 
   [...state.posts].reverse().forEach((post, i) => {
     const card = document.createElement('div');
@@ -191,7 +170,6 @@ function renderRecentPosts() {
         <div class="post-card-meta">${post.date} · ${post.mediaType}</div>
       </div>
     `;
-
     recentList.appendChild(card);
   });
 }
@@ -211,38 +189,30 @@ navPostBtn.addEventListener('click', async () => {
 });
 
 async function checkPlatformConnections() {
+  // TikTok Card
   const tiktokCard = document.querySelector('.platform-card[data-platform="tiktok"]');
   const ttStatus = document.getElementById('tt-status');
   const ttConnectBtn = document.getElementById('tt-connect-btn');
-
-  let isConnected = false;
+  let isTikTokConnected = false;
 
   try {
     const response = await fetch('/api/auth/status/tiktok');
     if (response.ok) {
       const data = await response.json();
-      isConnected = data.connected;
-      state.tiktokConnected = isConnected;
-    } else {
-      isConnected = false;
+      isTikTokConnected = data.connected;
+      state.tiktokConnected = isTikTokConnected;
     }
   } catch (error) {
-    console.error("Could not fetch verification status from server:", error);
-    isConnected = false;
+    console.error("TikTok Verification Network Error:", error);
   }
 
   if (tiktokCard) {
     const toggle = tiktokCard.querySelector('.platform-toggle');
-
-    if (!isConnected) {
+    if (!isTikTokConnected) {
       tiktokCard.classList.add('disabled');
-      if (toggle) {
-        toggle.checked = false;
-        toggle.disabled = true;
-      }
+      if (toggle) { toggle.checked = false; toggle.disabled = true; }
       if (ttStatus) ttStatus.textContent = "Account Not Linked";
       if (ttConnectBtn) ttConnectBtn.style.display = "block";
-
     } else {
       tiktokCard.classList.remove('disabled');
       if (toggle) toggle.disabled = false;
@@ -250,11 +220,47 @@ async function checkPlatformConnections() {
       if (ttConnectBtn) ttConnectBtn.style.display = "none";
     }
   }
+
+  // YouTube Card
+  const youtubeCard = document.querySelector('.platform-card[data-platform="youtube"]');
+  const ytStatus = document.getElementById('yt-status');
+  const ytConnectBtn = document.getElementById('yt-connect-btn');
+  let isYouTubeConnected = false;
+
+  try {
+    const response = await fetch('/api/auth/status/youtube');
+    if (response.ok) {
+      const data = await response.json();
+      isYouTubeConnected = data.connected;
+      state.youtubeConnected = isYouTubeConnected;
+    }
+  } catch (error) {
+    console.error("YouTube Verification Network Error:", error);
+  }
+
+  if (youtubeCard) {
+    const toggle = youtubeCard.querySelector('.platform-toggle');
+    const isPhoto = state.mediaType === 'photo';
+
+    if (!isYouTubeConnected) {
+      youtubeCard.classList.add('disabled');
+      if (toggle) { toggle.checked = false; toggle.disabled = true; }
+      if (ytStatus) ytStatus.textContent = "Account Not Linked";
+      if (ytConnectBtn) ytConnectBtn.style.display = "block";
+    } else if (isPhoto) {
+      youtubeCard.classList.add('disabled');
+      if (toggle) { toggle.checked = false; toggle.disabled = true; }
+      if (ytStatus) ytStatus.textContent = "Connected";
+      if (ytConnectBtn) ytConnectBtn.style.display = "none";
+    } else {
+      youtubeCard.classList.remove('disabled');
+      if (toggle) toggle.disabled = false;
+      if (ytStatus) ytStatus.textContent = "Connected";
+      if (ytConnectBtn) ytConnectBtn.style.display = "none";
+    }
+  }
 }
 
-/* ══════════════════════════════════════════════════
-   NEW POST — MEDIA SELECTION
-══════════════════════════════════════════════════ */
 mediaInput.addEventListener('change', () => {
   const file = mediaInput.files[0];
   if (file) loadMediaFile(file);
@@ -293,27 +299,27 @@ function loadMediaFile(file) {
   state.mediaType = isVideo ? 'video' : isImage ? 'photo' : 'audio';
   state.mediaURL = URL.createObjectURL(file);
 
-  dropLabelWrap.style.visibility = 'hidden';
-  mediaPreview.removeAttribute('hidden');
-  previewBadge.textContent = state.mediaType;
+  if (dropLabelWrap) dropLabelWrap.style.visibility = 'hidden';
+  if (mediaPreview) mediaPreview.removeAttribute('hidden');
+  if (previewBadge) previewBadge.textContent = state.mediaType;
 
-  previewImg.setAttribute('hidden', '');
-  previewVid.setAttribute('hidden', '');
-  audioPreview.setAttribute('hidden', '');
+  if (previewImg) previewImg.setAttribute('hidden', '');
+  if (previewVid) previewVid.setAttribute('hidden', '');
+  if (audioPreview) audioPreview.setAttribute('hidden', '');
 
-  if (isImage) {
+  if (isImage && previewImg) {
     previewImg.src = state.mediaURL;
     previewImg.removeAttribute('hidden');
-  } else if (isVideo) {
+  } else if (isVideo && previewVid) {
     previewVid.src = state.mediaURL;
     previewVid.removeAttribute('hidden');
-  } else {
-    previewAudio.src = state.mediaURL;
-    audioFilename.textContent = file.name;
+  } else if (isAudio && audioPreview) {
+    if (previewAudio) previewAudio.src = state.mediaURL;
+    if (audioFilename) audioFilename.textContent = file.name;
     audioPreview.removeAttribute('hidden');
   }
 
-  if (!postTitle.value) {
+  if (postTitle && !postTitle.value) {
     postTitle.value = file.name.replace(/\.[^.]+$/, '');
   }
 
@@ -329,38 +335,34 @@ function clearMediaPreview() {
   state.mediaFile = null;
   state.mediaType = null;
   state.mediaURL = null;
-  mediaInput.value = '';
+  if (mediaInput) mediaInput.value = '';
 
-  previewImg.src = '';
-  previewVid.src = '';
-  previewAudio.src = '';
-  previewImg.setAttribute('hidden', '');
-  previewVid.setAttribute('hidden', '');
-  audioPreview.setAttribute('hidden', '');
-  mediaPreview.setAttribute('hidden', '');
+  if (previewImg) { previewImg.src = ''; previewImg.setAttribute('hidden', ''); }
+  if (previewVid) { previewVid.src = ''; previewVid.setAttribute('hidden', ''); }
+  if (previewAudio) previewAudio.src = '';
+  if (audioPreview) audioPreview.setAttribute('hidden', '');
+  if (mediaPreview) mediaPreview.setAttribute('hidden', '');
 
-  dropLabelWrap.style.visibility = 'visible';
+  if (dropLabelWrap) dropLabelWrap.style.visibility = 'visible';
 
   applyMediaTypeRules();
 }
 
-/* ══════════════════════════════════════════════════
-   PLATFORM AVAILABILITY RULES BY MEDIA TYPE
-══════════════════════════════════════════════════ */
 function applyMediaTypeRules() {
   const isPhoto = state.mediaType === 'photo';
 
   document.querySelectorAll('.platform-card').forEach(card => {
     const key = card.dataset.platform;
     const toggle = card.querySelector('.platform-toggle');
-    const disabledForPhoto = (key === 'youtube' || key === 'ytshorts');
+    const disabledForPhoto = (key === 'youtube');
 
     if (isPhoto && disabledForPhoto) {
       card.classList.add('disabled');
       if (toggle) toggle.checked = false;
     } else {
-      // Keep TikTok disabled if it isn't connected yet
       if (key === 'tiktok' && !state.tiktokConnected) {
+        card.classList.add('disabled');
+      } else if (key === 'youtube' && !state.youtubeConnected) {
         card.classList.add('disabled');
       } else {
         card.classList.remove('disabled');
@@ -369,13 +371,10 @@ function applyMediaTypeRules() {
     if (toggle) card.classList.toggle('enabled', toggle.checked && !card.classList.contains('disabled'));
   });
 
-  photoModeNote.toggleAttribute('hidden', !isPhoto);
-  audioNote.toggleAttribute('hidden', state.mediaType !== 'audio');
+  if (photoModeNote) photoModeNote.toggleAttribute('hidden', !isPhoto);
+  if (audioNote) audioNote.toggleAttribute('hidden', state.mediaType !== 'audio');
 }
 
-/* ══════════════════════════════════════════════════
-   NEW POST — PLATFORM TOGGLES
-══════════════════════════════════════════════════ */
 platformToggles.forEach(toggle => {
   toggle.addEventListener('change', () => {
     const card = toggle.closest('.platform-card');
@@ -397,9 +396,6 @@ function getSelectedPlatforms() {
     .map(t => t.dataset.key);
 }
 
-/* ══════════════════════════════════════════════════
-   NEW POST — POST NOW
-══════════════════════════════════════════════════ */
 postNowBtn.addEventListener('click', handlePostNow);
 
 async function handlePostNow() {
@@ -412,39 +408,41 @@ async function handlePostNow() {
   }
 
   if (!title || platforms.length === 0) {
-    postError.removeAttribute('hidden');
-    setTimeout(() => postError.setAttribute('hidden', ''), 3000);
-    if (!title) {
+    if (postError) postError.removeAttribute('hidden');
+    setTimeout(() => postError && postError.setAttribute('hidden', ''), 3000);
+    if (!title && postTitle) {
       postTitle.focus();
       postTitle.style.borderColor = 'var(--error)';
-      setTimeout(() => postTitle.style.borderColor = '', 1500);
+      setTimeout(() => { if (postTitle) postTitle.style.borderColor = ''; }, 1500);
     }
     return;
   }
 
-  postError.setAttribute('hidden', '');
+  if (postError) postError.setAttribute('hidden', '');
 
   let workingTitle = title;
 
   if (state.mediaType === 'audio') {
     switchScreen('screen-posting');
 
-    postingDone.setAttribute('hidden', '');
-    postingLoader.removeAttribute('hidden');
-    postingTitleDisplay.textContent = 'Converting audio to video asset...';
-    postingThumb.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    if (postingDone) postingDone.setAttribute('hidden', '');
+    if (postingLoader) postingLoader.removeAttribute('hidden');
+    if (postingTitleDisplay) postingTitleDisplay.textContent = 'Converting audio to video asset...';
+    if (postingThumb) postingThumb.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
-    postingPlatforms.innerHTML = `
-      <div class="posting-row">
-        <div class="posting-row-logo" style="background: var(--primary); display: flex; align-items: center; justify-content: center;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+    if (postingPlatforms) {
+      postingPlatforms.innerHTML = `
+        <div class="posting-row">
+          <div class="posting-row-logo" style="background: var(--primary); display: flex; align-items: center; justify-content: center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <span class="posting-row-name">MoviePy Engine</span>
+          <span class="posting-status status-uploading">
+            <span class="status-spin"></span> Rendering video file...
+          </span>
         </div>
-        <span class="posting-row-name">MoviePy Engine</span>
-        <span class="posting-status status-uploading">
-          <span class="status-spin"></span> Rendering video file...
-        </span>
-      </div>
-    `;
+      `;
+    }
 
     const formData = new FormData();
     formData.append('file', state.mediaFile);
@@ -477,41 +475,36 @@ async function handlePostNow() {
   startPosting(workingTitle, platforms);
 }
 
-/* ══════════════════════════════════════════════════
-   POSTING SCREEN — REAL & SIMULATED PIPELINES
-══════════════════════════════════════════════════ */
 async function startPosting(title, platforms) {
-  postingDone.setAttribute('hidden', '');
-  postingLoader.removeAttribute('hidden');
-  postingPlatforms.innerHTML = '';
-  postingTitleDisplay.textContent = title;
+  if (postingDone) postingDone.setAttribute('hidden', '');
+  if (postingLoader) postingLoader.removeAttribute('hidden');
+  if (postingPlatforms) postingPlatforms.innerHTML = '';
+  if (postingTitleDisplay) postingTitleDisplay.textContent = title;
 
-  if (state.mediaURL && state.mediaType === 'photo') {
-    postingThumb.innerHTML = `<img src="${state.mediaURL}" alt="thumb" />`;
-  } else if (state.mediaURL && state.mediaType === 'video') {
-    postingThumb.innerHTML = `<video src="${state.mediaURL}" muted></video>`;
-  } else {
-    postingThumb.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> * Rendered`;
+  if (postingThumb) {
+    if (state.mediaURL && state.mediaType === 'photo') {
+      postingThumb.innerHTML = `<img src="${state.mediaURL}" alt="thumb" />`;
+    } else if (state.mediaURL && state.mediaType === 'video') {
+      postingThumb.innerHTML = `<video src="${state.mediaURL}" muted></video>`;
+    } else {
+      postingThumb.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> * Rendered`;
+    }
   }
 
   const rowMap = {};
   platforms.forEach(p => {
     const row = buildPostingRow(p, 'uploading');
-    postingPlatforms.appendChild(row);
+    if (postingPlatforms) postingPlatforms.appendChild(row);
     rowMap[p] = row;
   });
 
-  // Execute pipelines sequentially or in parallel
   for (const p of platforms) {
     if (p === 'tiktok') {
       try {
-        // Trigger the real FastAPI chunk-upload execution endpoint
-        const response = await fetch('/api/test-publish/tiktok', {
-          method: 'POST'
-        });
+        const response = await fetch('/api/test-publish/tiktok', { method: 'POST' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
-
-        if (response.ok && result.status === 'success') {
+        if (result.status === 'success') {
           updatePostingRow(rowMap[p], 'complete');
         } else {
           updatePostingRow(rowMap[p], 'failed');
@@ -521,8 +514,26 @@ async function startPosting(title, platforms) {
         updatePostingRow(rowMap[p], 'failed');
         alert(`Failed to establish route connection to backend: ${err.message}`);
       }
+    } else if (p === 'youtube') {
+      try {
+        const response = await fetch('/api/test-publish/youtube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_file: title }) // FIX: Changed undefined variable to matching parameter 'title'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        if (result.status === 'success') {
+          updatePostingRow(rowMap[p], 'complete');
+        } else {
+          updatePostingRow(rowMap[p], 'failed');
+          alert(`YouTube Distribution Interrupted: ${result.error || 'Server Processing Error'}`);
+        }
+      } catch (err) {
+        updatePostingRow(rowMap[p], 'failed');
+        alert(`Failed to establish route connection to backend: ${err.message}`);
+      }
     } else {
-      // Temporary sandbox fallback for other modules (Instagram, Facebook, YouTube)
       const delay = 1200 + Math.random() * 800;
       await new Promise(resolve => setTimeout(resolve, delay));
       const success = Math.random() > 0.05;
@@ -530,15 +541,14 @@ async function startPosting(title, platforms) {
     }
   }
 
-  // All targets processed
   setTimeout(() => {
-    postingLoader.setAttribute('hidden', '');
-    postingDone.removeAttribute('hidden');
+    if (postingLoader) postingLoader.setAttribute('hidden', '');
+    if (postingDone) postingDone.removeAttribute('hidden');
 
     state.posts.push({
       id: Date.now(),
       title,
-      caption: postCaption.value.trim(),
+      caption: postCaption ? postCaption.value.trim() : '',
       platforms,
       mediaType: state.mediaType || 'photo',
       mediaURL: state.mediaURL,
@@ -563,6 +573,7 @@ function buildPostingRow(platform, status) {
 }
 
 function updatePostingRow(row, status) {
+  if (!row) return;
   const statusEl = row.querySelector('.posting-status');
   if (!statusEl) return;
   if (status === 'complete') {
@@ -584,9 +595,6 @@ goDashboardBtn.addEventListener('click', () => {
   resetNewPostForm();
 });
 
-/* ══════════════════════════════════════════════════
-   NAVIGATION — Back / Bottom nav
-══════════════════════════════════════════════════ */
 backFromPost.addEventListener('click', () => {
   switchScreen('screen-dashboard');
   setNavActive(screenDashboard, 'dashboard');
@@ -599,21 +607,19 @@ navDashFromPost.addEventListener('click', () => {
 });
 
 function setNavActive(screenEl, activeKey) {
+  if (!screenEl) return;
   screenEl.querySelectorAll('.nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.nav === activeKey);
   });
 }
 
-/* ══════════════════════════════════════════════════
-   HELPERS
-══════════════════════════════════════════════════ */
 function resetNewPostForm() {
   clearMediaPreview();
-  postTitle.value = '';
-  postCaption.value = '';
-  postError.setAttribute('hidden', '');
+  if (postTitle) postTitle.value = '';
+  if (postCaption) postCaption.value = '';
+  if (postError) postError.setAttribute('hidden', '');
   platformToggles.forEach(t => {
-    t.checked = t.dataset.key !== 'ytshorts';
+    t.checked = true;
   });
   applyMediaTypeRules();
 }
@@ -623,7 +629,6 @@ function platformLabel(key) {
     tiktok: 'TikTok',
     instagram: 'Instagram',
     youtube: 'YouTube',
-    ytshorts: 'YouTube Shorts',
     facebook: 'Facebook',
   };
   return map[key] || key;
@@ -634,7 +639,6 @@ function platformIconSVG(key) {
     tiktok: `<svg viewBox="0 0 32 32" width="18" height="18" fill="white"><path d="M21.2 2h-4.4v19.4a4.8 4.8 0 0 1-4.8 4.6 4.8 4.8 0 0 1-4.8-4.8 4.8 4.8 0 0 1 4.8-4.8c.46 0 .9.06 1.32.18V12.1a9.24 9.24 0 0 0-1.32-.1A9.2 9.2 0 0 0 2.8 21.2 9.2 9.2 0 0 0 12 30.4a9.2 9.2 0 0 0 9.2-9.2V11.1a13.5 13.5 0 0 0 8 2.6V9.28A9.24 9.24 0 0 1 21.2 2z"/></svg>`,
     instagram: `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4" fill="none" stroke="white" stroke-width="1.5"/><circle cx="17.5" cy="6.5" r="1" fill="white"/></svg>`,
     youtube: `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>`,
-    ytshorts: `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>`,
     facebook: `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M22 12.06C22 6.51 17.52 2 12 2S2 6.51 2 12.06c0 5 3.66 9.13 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.51 1.49-3.9 3.77-3.9 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.77-1.63 1.56v1.87h2.78l-.45 2.91h-2.33V22c4.78-.81 8.44-4.94 8.44-9.94z"/></svg>`,
   };
   return svgs[key] || '';
@@ -645,11 +649,7 @@ function escHtml(str) {
   return String(str).replace(/[&<>"']/g, m => map[m]);
 }
 
-/* ══════════════════════════════════════════════════
-   PWA — INSTALL PROMPT & SERVICE WORKER
-══════════════════════════════════════════════════ */
 let deferredInstallPrompt = null;
-
 const installBanner = document.getElementById('install-banner');
 const installBtn = document.getElementById('install-btn');
 const installDismiss = document.getElementById('install-dismiss');
@@ -657,10 +657,8 @@ const installDismiss = document.getElementById('install-dismiss');
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-
   const dismissed = sessionStorage.getItem('installBannerDismissed');
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-
   if (!dismissed && !isStandalone && installBanner) {
     installBanner.removeAttribute('hidden');
   }
@@ -682,51 +680,37 @@ installDismiss?.addEventListener('click', () => {
   sessionStorage.setItem('installBannerDismissed', 'true');
 });
 
-window.addEventListener('appinstalled', () => {
-  if (installBanner) installBanner.setAttribute('hidden', '');
-  sessionStorage.setItem('installBannerDismissed', 'true');
-});
-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => { });
   });
 }
 
-/* ══════════════════════════════════════════════════
-   INIT (URL INTERCEPTION MODULE)
-══════════════════════════════════════════════════ */
+// URL INTERCEPTION MODULE
 (async function initApp() {
   const urlParams = new URLSearchParams(window.location.search);
+  const tkConn = urlParams.get('tiktok_connected') === 'true';
+  const ytConn = urlParams.get('youtube_connected') === 'true';
 
-  if (urlParams.get('tiktok_connected') === 'true') {
-    // 1. Manually restore session state objects to bypass authentication wall
+  if (tkConn || ytConn) {
     state.loggedIn = true;
-    state.tiktokConnected = true;
     state.user = { name: 'Pastor Mrs. Lubega', email: DEMO_EMAIL };
+
+    if (tkConn) state.tiktokConnected = true;
+    if (ytConn) state.youtubeConnected = true;
 
     const userDisplay = document.getElementById('topbar-user');
     if (userDisplay) userDisplay.textContent = state.user.name;
 
-    // 2. Clear out container tables and run validation steps
     await updateDashboard();
+    switchScreen('screen-dashboard'); // FIX: Instantly drop to dashboard loop instead of getting stuck on login screen
 
-    // 3. Drop layout focus straight into destination configuration panel
-    switchScreen('screen-newpost');
-    const screenNewpostEl = document.getElementById('screen-newpost');
-    if (screenNewpostEl) {
-      screenNewpostEl.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.nav === 'new-post');
-      });
-    }
     await checkPlatformConnections();
-
-    // 4. Safely purge URL parameter layout arguments from memory context
     window.history.replaceState({}, document.title, window.location.pathname);
 
-    alert("TikTok Account Successfully Linked!");
+    if (tkConn) alert("TikTok Account Successfully Linked!");
+    if (ytConn) alert("YouTube Channel Successfully Linked!");
   } else {
-    // Standard initialization sequence
     switchScreen('screen-login');
   }
 })();

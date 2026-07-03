@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="HerGlory" />
-  <link rel="apple-touch-icon" href="/static/assets/icon-192.png" />
+  <link class="apple-touch-icon" href="/static/assets/icon-192.png" />
 
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -213,7 +213,7 @@
             <div class="platform-info">
               <span class="platform-name">TikTok</span>
               <span class="platform-handle" id="tt-handle">Ministry Official</span>
-              <a href="http://127.0.0.1:8000/api/auth/tiktok" id="tt-connect-btn" style="font-size: 11px; color: #0070f3; text-decoration: underline; display: none; margin-top: 2px; cursor: pointer;">Connect Account</a>
+              <a href="/api/auth/tiktok" id="tt-connect-btn" style="font-size: 11px; color: #0070f3; text-decoration: underline; display: none; margin-top: 2px; cursor: pointer;">Connect Account</a>
               <span class="platform-status-label" id="tt-status" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">Checking link...</span>
             </div>
           </div>
@@ -238,7 +238,7 @@
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
-
+        
         <div class="platform-card" data-platform="youtube">
           <div class="platform-left">
             <div class="platform-logo yt-logo">
@@ -247,29 +247,13 @@
             <div class="platform-info">
               <span class="platform-name">YouTube</span>
               <span class="platform-handle" id="yt-handle">Grace Ministry Channel</span>
+              <a href="/api/auth/youtube" id="yt-connect-btn" style="font-size: 11px; color: #0070f3; text-decoration: underline; display: none; margin-top: 2px; cursor: pointer;">Connect Account</a>
+              <span class="platform-status-label" id="yt-status" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">Checking link...</span>
               <span class="platform-note platform-note-disabled" data-disabled-for="photo">Videos &amp; audio only — not available for photos</span>
             </div>
           </div>
           <label class="toggle" aria-label="Toggle YouTube">
             <input type="checkbox" class="toggle-input platform-toggle" data-key="youtube" checked />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          </label>
-        </div>
-
-        <div class="platform-card" data-platform="ytshorts">
-          <div class="platform-left">
-            <div class="platform-logo ytshorts-logo">
-              <svg viewBox="0 0 32 32" width="22" height="22" fill="currentColor"><path d="M29.4 8.8a3.68 3.68 0 0 0-2.6-2.6C24.6 5.6 16 5.6 16 5.6s-8.6 0-10.8.6a3.68 3.68 0 0 0-2.6 2.6C2 11 2 16 2 16s0 5 .6 7.2a3.68 3.68 0 0 0 2.6 2.6C7.4 26.4 16 26.4 16 26.4s8.6 0 10.8-.6a3.68 3.68 0 0 0 2.6-2.6C30 21 30 16 30 16s0-5-.6-7.2zm-16.4 9.6V13.6l7.2 2.4-7.2 2.4z"/><rect x="0" y="0" width="12" height="12" rx="3" fill="#ff0000"/><text x="6" y="9" text-anchor="middle" fill="white" font-size="8" font-weight="bold">S</text></svg>
-            </div>
-            <div class="platform-info">
-              <span class="platform-name">YouTube Shorts</span>
-              <span class="platform-handle" id="yts-handle">Grace Ministry Shorts</span>
-              <span class="platform-note">Auto-detected if ≤60s vertical</span>
-              <span class="platform-note platform-note-disabled" data-disabled-for="photo">Videos &amp; audio only — not available for photos</span>
-            </div>
-          </div>
-          <label class="toggle" aria-label="Toggle YouTube Shorts">
-            <input type="checkbox" class="toggle-input platform-toggle" data-key="ytshorts" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </div>
