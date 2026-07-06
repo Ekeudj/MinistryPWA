@@ -1,5 +1,5 @@
 from app.config import settings
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request  
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request, BackgroundTasks  
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from app.video_engine import generate_sermon_video
@@ -145,7 +145,7 @@ def youtube_auth_login():
         f"scope=https://www.googleapis.com/auth/youtube.upload&"
         f"access_type=offline&prompt=select_account"
     )
-    return RedirectResponse(url=google_oauth_url)
+    return RedirectResponse(url=google_oauth_url, status_code=307)
 
 @app.get("/api/auth/status/youtube")
 async def get_youtube_status():
@@ -155,39 +155,87 @@ async def get_youtube_status():
 @app.get("/api/callback/youtube")
 async def youtube_oauth_callback(code: str = Query(None)):
     if not code:
-        raise HTTPException(status_code=400, detail="Authorization code missing from Google redirect hook.")
+        print("[YouTube] Authorization code missing from callback parameters.")
+        return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=false", status_code=307)
 
     redirect_uri = "https://kx871t4g-8000.inc1.devtunnels.ms/api/callback/youtube"
     token_url = "https://oauth2.googleapis.com/token"
     
-    client_id = os.getenv("YOUTUBE_CLIENT_KEY")
-    client_secret = os.getenv("YOUTUBE_CLIENT_SECRET")
-
     payload = {
         "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id": os.getenv("YOUTUBE_CLIENT_KEY"),
+        "client_secret": os.getenv("YOUTUBE_CLIENT_SECRET"),
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code"
     }
 
-    token_res = requests.post(token_url, data=payload)
-    if token_res.status_code != 200:
-        return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=false")
+    try:
+        # Use httpx to prevent network thread deadlocks over tunnels
+        async with httpx.AsyncClient() as client:
+            token_res = await client.post(token_url, data=payload, timeout=15.0)
+            
+        if token_res.status_code == 200:
+            tokens = token_res.json()
+            YOUTUBE_TOKENS["access_token"] = tokens.get("access_token")
+            YOUTUBE_TOKENS["refresh_token"] = tokens.get("refresh_token")
+            print("[YouTube] OAuth Token exchanges completed successfully.")
+            return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=true", status_code=307)
+        else:
+            print(f"[YouTube] Token gate rejected request: {token_res.text}")
+    except Exception as e:
+        print(f"[YouTube] Callback exception caught: {str(e)}")
 
-    tokens = token_res.json()
-    
-    YOUTUBE_TOKENS["access_token"] = tokens.get("access_token")
-    YOUTUBE_TOKENS["refresh_token"] = tokens.get("refresh_token")
+    return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=false", status_code=307)
 
-    return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=true")
+
+# Helper function to process the upload in the background
+def run_youtube_upload(video_path: str, access_token: str):
+    try:
+        print(f"[YouTube Background Task] Heavy upload started for: {video_path}")
+        publisher = YouTubePublisher()
+        result = publisher.publish_video(
+            video_path=video_path,
+            title="Pastor Mrs. Lubega Live Sermon Clip",
+            description="Powerful spiritual insight for today. #shorts #faith",
+            access_token=access_token
+        )
+        print(f"[YouTube Background Task] Execution completed: {result}")
+    except Exception as e:
+        print(f"[YouTube Background Task] Processing crashed: {str(e)}")
+
 
 @app.post("/api/test-publish/youtube")
-async def production_publish_youtube(request: Request):
+async def production_publish_youtube(request: Request, background_tasks: BackgroundTasks):
     access_token = YOUTUBE_TOKENS.get("access_token")
     
     if not access_token:
-        # FIX: Changed raw dictionaries to explicit JSONResponses to prevent Unexpected end of JSON Input errors
+        return JSONResponse(status_code=400, content={"status": "failed", "error": "User channel is not authenticated. Please run OAuth loop first."})
+
+    try:
+        body = await request.json()
+        video_file_path = body.get("video_file", "test.mp4")
+    except Exception:
+        video_file_path = "test.mp4"
+
+    if not os.path.exists(video_file_path):
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        alternative_path = os.path.join(BASE_DIR, "uploads", video_file_path)
+        if os.path.exists(alternative_path):
+            video_file_path = alternative_path
+        else:
+            return JSONResponse(status_code=404, content={"status": "failed", "error": f"Missing operational source file content: '{video_file_path}'"})
+
+    #  THE FIX: Hand the processing over to the background worker pool
+    background_tasks.add_task(run_youtube_upload, video_file_path, access_token)
+    
+    # Return a 202 Accepted status instantly to beat the 60s devtunnel gateway timeout
+    return JSONResponse(status_code=202, content={
+        "status": "processing", 
+        "message": "Video upload dispatched to system background workers successfully!"
+    })
+    access_token = YOUTUBE_TOKENS.get("access_token")
+    
+    if not access_token:
         return JSONResponse(status_code=400, content={"status": "failed", "error": "User channel is not authenticated. Please run OAuth loop first."})
 
     try:
@@ -216,7 +264,6 @@ async def production_publish_youtube(request: Request):
     
     status_code = 200 if result.get("status") == "success" else 500
     return JSONResponse(status_code=status_code, content=result)
-
 # =═════════════════════════════════════════════════
 # 5. CORE SYSTEM UTILITIES & UTILS
 # =═════════════════════════════════════════════════

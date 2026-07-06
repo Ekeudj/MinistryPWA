@@ -393,7 +393,7 @@ platformToggles.forEach(toggle => {
 function getSelectedPlatforms() {
   return Array.from(platformToggles)
     .filter(t => t.checked)
-    .map(t => t.dataset.key);
+    .map(t => t.dataset.platform || t.dataset.key || t.value);
 }
 
 postNowBtn.addEventListener('click', handlePostNow);
@@ -516,14 +516,21 @@ async function startPosting(title, platforms) {
       }
     } else if (p === 'youtube') {
       try {
+        //  FIXED: Explicitly targeting our backend endpoint route structure
         const response = await fetch('/api/test-publish/youtube', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ video_file: title }) // FIX: Changed undefined variable to matching parameter 'title'
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ video_file: title })
         });
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
-        if (result.status === 'success') {
+
+        // Handle the 202 Accepted status processing loop safely
+        if (result.status === 'success' || result.status === 'processing') {
           updatePostingRow(rowMap[p], 'complete');
         } else {
           updatePostingRow(rowMap[p], 'failed');
@@ -540,22 +547,6 @@ async function startPosting(title, platforms) {
       updatePostingRow(rowMap[p], success ? 'complete' : 'failed');
     }
   }
-
-  setTimeout(() => {
-    if (postingLoader) postingLoader.setAttribute('hidden', '');
-    if (postingDone) postingDone.removeAttribute('hidden');
-
-    state.posts.push({
-      id: Date.now(),
-      title,
-      caption: postCaption ? postCaption.value.trim() : '',
-      platforms,
-      mediaType: state.mediaType || 'photo',
-      mediaURL: state.mediaURL,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    });
-  }, 600);
-}
 
 function buildPostingRow(platform, status) {
   const row = document.createElement('div');
@@ -714,3 +705,4 @@ if ('serviceWorker' in navigator) {
     switchScreen('screen-login');
   }
 })();
+}
