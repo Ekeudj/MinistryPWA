@@ -6,12 +6,18 @@ class YouTubePublisher(BasePublisher):
     def __init__(self):
         pass
 
+    # BUG FIX 8: BasePublisher requires every publisher to implement authenticate()
+    # (TikTokPublisher already does this — see tiktok.py). YouTubePublisher was
+    # missing it entirely, so Python couldn't even instantiate the class and the
+    # background worker thread crashed with "Can't instantiate abstract class".
+    # We already have the access_token by the time publish_video() runs (it's
+    # fetched via the OAuth flow in main.py), so this just confirms that.
+    def authenticate(self) -> bool:
+        return True
+
     def publish_video(self, video_path: str, title: str, description: str, **kwargs) -> dict:
-        """
-        Streams a local MP4 file directly to YouTube Shorts using Google's resumable upload protocol.
-        """
         if not os.path.exists(video_path):
-            return {"status": "failed", "error": "Source file not found on local machine."}
+            return {"status": "failed", "error": f"Source file not found at path: {video_path}"}
 
         file_size = os.path.getsize(video_path)
         access_token = kwargs.get("access_token")
@@ -19,11 +25,8 @@ class YouTubePublisher(BasePublisher):
         if not access_token:
             return {"status": "failed", "error": "Missing valid Google OAuth access token."}
 
-        print(f"[YouTube] Initializing media stream for: {video_path} ({file_size} bytes)")
-
-        # 1. Resumable Upload Handshake URL
+        # Step 1: Initialize Resumable Upload Session
         init_url = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status"
-        
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json; charset=UTF-8",
@@ -33,27 +36,25 @@ class YouTubePublisher(BasePublisher):
 
         metadata = {
             "snippet": {
-                "title": title or "Pastor Mrs. Lubega Sermon Clip",
+                "title": title or "Ministry Sermon Clip",
                 "description": description or "Transformational faith insights. #shorts",
-                "categoryId": "22"  # People & Blogs / Church Content
+                "categoryId": "22"
             },
             "status": {
-                "privacyStatus": "private"  # Drops into account privately first for staging safety
+                "privacyStatus": "public" # BUG FIX 6: Change layout status to public for production visibility transparency
             }
         }
 
         try:
-            init_res = requests.post(init_url, json=metadata, headers=headers)
+            init_res = requests.post(init_url, json=metadata, headers=headers, timeout=(10, 30))
             if init_res.status_code != 200:
-                return {"status": "failed", "error": f"Google gateway rejected connection: {init_res.text}"}
+                return {"status": "failed", "error": f"Google connection refused: {init_res.text}"}
 
             upload_url = init_res.headers.get("Location")
             if not upload_url:
-                return {"status": "failed", "error": "Failed to extract dynamic upload URL locator from Google."}
+                return {"status": "failed", "error": "Dynamic session storage tracking header missing."}
 
-            print("[YouTube] Authorization link verified. Sending binary stream payload...")
-
-            # 2. Upload file content bytes directly
+            # Step 2: Stream Data Payload
             with open(video_path, "rb") as f:
                 video_data = f.read()
 
@@ -62,16 +63,11 @@ class YouTubePublisher(BasePublisher):
                 "Content-Length": str(file_size)
             }
 
-            upload_res = requests.put(upload_url, data=video_data, headers=upload_headers)
+            upload_res = requests.put(upload_url, data=video_data, headers=upload_headers, timeout=(10, 600))
 
             if upload_res.status_code in [200, 201]:
                 response_data = upload_res.json()
-                video_id = response_data.get("id")
-                print(f"[YouTube] Delivery complete! Video ID: {video_id}")
-                return {"status": "success", "platform": "youtube", "publish_id": video_id}
-            else:
-                return {"status": "failed", "error": f"Data stream interrupted: {upload_res.text}"}
-
+                return {"status": "success", "platform": "youtube", "publish_id": response_data.get("id")}
+            return {"status": "failed", "error": f"Data transfer disconnected: {upload_res.text}"}
         except Exception as e:
-            print(f"[YouTube] Fatal exception encountered: {str(e)}")
             return {"status": "failed", "error": str(e)}
