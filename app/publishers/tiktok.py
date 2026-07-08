@@ -15,8 +15,14 @@ class TikTokPublisher(BasePublisher):
         file_size = os.path.getsize(video_path)
         MIN_CHUNK_SIZE = 5 * 1024 * 1024  
         DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024
+        # BUG FIX 12: TikTok allows a single chunk for anything up to 64MB (their max
+        # chunk size). We were switching to multi-chunk mode at just 10MB, which
+        # forced normal-sized clips (like your 47MB one) into unnecessary splitting
+        # that tripped TikTok's chunk validation. Files under this cap now upload
+        # as one clean chunk, same as your working 8MB test.
+        MAX_SINGLE_CHUNK = 64 * 1024 * 1024
 
-        if file_size <= DEFAULT_CHUNK_SIZE:
+        if file_size <= MAX_SINGLE_CHUNK:
             chunk_size = file_size
             total_chunk_count = 1
         else:
