@@ -21,10 +21,14 @@ class TikTokPublisher(BasePublisher):
             total_chunk_count = 1
         else:
             chunk_size = DEFAULT_CHUNK_SIZE
+            # BUG FIX 11: previously this shrank total_chunk_count by 1 to merge a
+            # small leftover chunk into the last one, but never adjusted chunk_size
+            # to match — so chunk_size * total_chunk_count no longer equaled the
+            # real file_size, and TikTok rejected the init call with
+            # "invalid total chunk count". The read loop below already merges any
+            # leftover bytes into the final chunk on its own (f.read() with no size
+            # limit on the last iteration), so we just need plain ceiling division here.
             total_chunk_count = (file_size + chunk_size - 1) // chunk_size
-            remaining_bytes = file_size % chunk_size
-            if remaining_bytes > 0 and remaining_bytes < MIN_CHUNK_SIZE:
-                total_chunk_count = file_size // chunk_size
         
         access_token = kwargs.get("access_token", "MOCK_TOKEN")
 
