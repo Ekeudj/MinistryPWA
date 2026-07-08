@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 class BasePublisher(ABC):
     """
     The master blueprint for all social media publishers.
-    Ensures both TikTok and YouTube handle uploads the exact same way.
+    Ensures both TikTok and YouTube handle uploads the exact sameway.
     """
 
     @abstractmethod
