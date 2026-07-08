@@ -309,7 +309,13 @@ async function handlePostNow() {
   switchScreen('screen-posting');
 
   if (postingLoader) postingLoader.removeAttribute('hidden');
-  if (postingTitleDisplay) postingTitleDisplay.textContent = 'Uploading operational media assets...';
+  // BUG FIX 13: bring back the audio-specific status message that used to show
+  // while the audio was being converted into a video before upload.
+  if (postingTitleDisplay) {
+    postingTitleDisplay.textContent = state.mediaType === 'audio'
+      ? 'Converting audio to video...'
+      : 'Uploading operational media assets...';
+  }
 
   const formData = new FormData();
   formData.append('file', state.mediaFile);
