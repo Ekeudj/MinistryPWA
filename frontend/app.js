@@ -289,7 +289,11 @@ function applyMediaTypeRules() {
 }
 
 function getSelectedPlatforms() {
-  return Array.from(platformToggles).filter(t => t.checked).map(t => t.value || t.dataset.platform);
+  // BUG FIX 9: checkboxes use data-key="tiktok"/"youtube" in the HTML, not data-platform,
+  // and an unset checkbox .value defaults to "on" — so this was always returning
+  // ["on","on"] instead of ["tiktok","youtube"], causing everything to fall into
+  // the "else = youtube" branch downstream.
+  return Array.from(platformToggles).filter(t => t.checked).map(t => t.dataset.key);
 }
 
 postNowBtn.addEventListener('click', handlePostNow);
@@ -352,7 +356,13 @@ async function startPosting(title, platforms) {
       const response = await fetch(`${window.location.origin}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "video_file": title })
+        // BUG FIX 10: send the user's actual title/caption so the backend doesn't
+        // fall back to its hardcoded default text.
+        body: JSON.stringify({
+          "video_file": title,
+          "title": postTitle.value.trim(),
+          "description": postCaption.value.trim()
+        })
       });
       const result = await response.json();
       if (response.ok) {

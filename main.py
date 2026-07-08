@@ -96,8 +96,13 @@ async def test_tiktok_publish(request: Request):
     try:
         body = await request.json()
         video_target = body.get("video_file", "test.mp4")
+        # BUG FIX 10: use whatever title/description the user typed, fall back to defaults only if missing
+        post_title = body.get("title") or "Ministry Live Sermon Clip"
+        post_description = body.get("description") or "Automated cross-posting platform delivery."
     except Exception:
         video_target = "test.mp4"
+        post_title = "Her Glory Ministry Live Sermon Clip"
+        post_description = "Automated cross-posting platform delivery."
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     video_file_path = os.path.join(BASE_DIR, "uploads", video_target)
@@ -111,8 +116,8 @@ async def test_tiktok_publish(request: Request):
     publisher = TikTokPublisher()
     result = publisher.publish_video(
         video_path=video_file_path,
-        title="Ministry Live Sermon Clip",
-        description="Automated cross-posting platform delivery.",
+        title=post_title,
+        description=post_description,
         access_token=token
     )
     
@@ -177,13 +182,13 @@ async def youtube_oauth_callback(code: str = Query(None)):
 
 
 # BUG FIX 2: Run blocking requests executor in a separate operational worker thread
-def run_youtube_upload(video_path: str, access_token: str):
+def run_youtube_upload(video_path: str, access_token: str, title: str, description: str):
     try:
         publisher = YouTubePublisher()
         publisher.publish_video(
             video_path=video_path,
-            title="Pastor Mrs. Lubega Live Sermon Clip",
-            description="Powerful spiritual insight for today. #shorts #faith",
+            title=title,
+            description=description,
             access_token=access_token
         )
     except Exception as e:
@@ -199,8 +204,13 @@ async def production_publish_youtube(request: Request, background_tasks: Backgro
     try:
         body = await request.json()
         video_file_path = body.get("video_file", "test.mp4")
+        # BUG FIX 10: use whatever title/description the user typed, fall back to defaults only if missing
+        post_title = body.get("title") or "Pastor Mrs. Lubega Live Sermon Clip"
+        post_description = body.get("description") or "Powerful spiritual insight for today. #shorts #faith"
     except Exception:
         video_file_path = "test.mp4"
+        post_title = "Pastor Mrs. Lubega Live Sermon Clip"
+        post_description = "Powerful spiritual insight for today. #shorts #faith"
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     alternative_path = os.path.join(BASE_DIR, "uploads", video_file_path)
@@ -214,7 +224,7 @@ async def production_publish_youtube(request: Request, background_tasks: Backgro
         return JSONResponse(status_code=404, content={"status": "failed", "error": f"Missing operational source file content: '{video_file_path}'"})
 
     # Offload execution safely to background threads
-    background_tasks.add_task(run_youtube_upload, video_file_path, access_token)
+    background_tasks.add_task(run_youtube_upload, video_file_path, access_token, post_title, post_description)
     return JSONResponse(status_code=202, content={"status": "processing", "message": "Video upload dispatched to system background workers successfully!"})
 
 # ===================================================
