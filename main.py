@@ -38,7 +38,7 @@ async def serve_frontend():
 @app.get("/api/auth/tiktok")
 async def tiktok_login():
     client_key = os.getenv("TIKTOK_CLIENT_KEY")
-    redirect_uri = "https://kx871t4g-8000.inc1.devtunnels.ms/api/callback/tiktok"
+    redirect_uri = "https://herglory-backend.onrender.com/api/callback/tiktok"
     scope = "user.info.basic,video.upload"
     
     auth_url = (
@@ -59,7 +59,7 @@ async def tiktok_callback(code: str = Query(None), error: str = Query(None)):
 
     client_key = os.getenv("TIKTOK_CLIENT_KEY")
     client_secret = os.getenv("TIKTOK_CLIENT_SECRET")
-    redirect_uri = "https://kx871t4g-8000.inc1.devtunnels.ms/api/callback/tiktok"
+    redirect_uri = "https://herglory-backend.onrender.com/api/callback/tiktok"
 
     token_url = "https://open.tiktokapis.com/v2/oauth/token/"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -76,11 +76,11 @@ async def tiktok_callback(code: str = Query(None), error: str = Query(None)):
         token_data = response.json()
 
     if "error" in token_data or "access_token" not in token_data:
-        return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?tiktok_connected=false")
+        return RedirectResponse(url="https://herglory-backend.onrender.com/?tiktok_connected=false")
 
     TIKTOK_TOKENS["access_token"] = token_data["access_token"]
     TIKTOK_TOKENS["refresh_token"] = token_data.get("refresh_token")
-    return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?tiktok_connected=true")
+    return RedirectResponse(url="https://herglory-backend.onrender.com/?tiktok_connected=true")
 
 @app.get("/api/auth/status/tiktok")
 async def get_tiktok_status():
@@ -127,7 +127,7 @@ async def test_tiktok_publish(request: Request):
 
 @app.get("/api/auth/youtube")
 def youtube_auth_login():
-    redirect_uri = "https://kx871t4g-8000.inc1.devtunnels.ms/api/callback/youtube"
+    redirect_uri = "https://herglory-backend.onrender.com/api/callback/youtube"
     client_id = os.getenv("YOUTUBE_CLIENT_KEY")
     
     google_oauth_url = (
@@ -147,9 +147,9 @@ async def get_youtube_status():
 @app.get("/api/callback/youtube")
 async def youtube_oauth_callback(code: str = Query(None)):
     if not code:
-        return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=false")
+        return RedirectResponse(url="https://herglory-backend.onrender.com/?youtube_connected=false")
 
-    redirect_uri = "https://kx871t4g-8000.inc1.devtunnels.ms/api/callback/youtube"
+    redirect_uri = "https://herglory-backend.onrender.com/api/callback/youtube"
     token_url = "https://oauth2.googleapis.com/token"
     
     payload = {
@@ -169,11 +169,11 @@ async def youtube_oauth_callback(code: str = Query(None)):
             YOUTUBE_TOKENS["access_token"] = tokens.get("access_token")
             YOUTUBE_TOKENS["refresh_token"] = tokens.get("refresh_token")
             # BUG FIX 1: Use standard clear response instead of keeping the PWA locked in an auth loop state
-            return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=true")
+            return RedirectResponse(url="https://herglory-backend.onrender.com/?youtube_connected=true")
     except Exception as e:
         print(f"[YouTube Callback Exception]: {str(e)}")
 
-    return RedirectResponse(url="https://kx871t4g-8000.inc1.devtunnels.ms/?youtube_connected=false")
+    return RedirectResponse(url="https://herglory-backend.onrender.com/?youtube_connected=false")
 
 
 # BUG FIX 2: Run blocking requests executor in a separate operational worker thread
