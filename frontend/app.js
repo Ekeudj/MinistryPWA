@@ -16,6 +16,7 @@ let state = {
   mediaURL: null,
   tiktokConnected: false,
   youtubeConnected: false,
+  metaConnected: false,
 };
 
 // DOM REFS
@@ -23,6 +24,8 @@ const ttStatus = document.getElementById('tt-status');
 const ttConnectBtn = document.getElementById('tt-connect-btn');
 const ytStatus = document.getElementById('yt-status');
 const ytConnectBtn = document.getElementById('yt-connect-btn');
+const metaStatus = document.getElementById('meta-status');
+const metaConnectBtn = document.getElementById('meta-connect-btn');
 
 const screenLogin = document.getElementById('screen-login');
 const screenDashboard = document.getElementById('screen-dashboard');
@@ -226,6 +229,32 @@ async function checkPlatformConnections() {
       if (ytConnectBtn) ytConnectBtn.style.display = "none";
     }
   }
+
+  // Meta (Facebook + Instagram) Connection Card — one shared token/connection
+  // gates both the Facebook and Instagram destination toggles.
+  try {
+    const response = await fetch('/api/auth/status/meta');
+    if (response.ok) {
+      const data = await response.json();
+      state.metaConnected = data.connected;
+    }
+  } catch (err) { console.error(err); }
+
+  const metaCard = document.querySelector('.platform-card[data-platform="meta"]');
+  if (metaCard) {
+    const subToggles = metaCard.querySelectorAll('.platform-toggle');
+    if (!state.metaConnected) {
+      metaCard.classList.add('disabled');
+      subToggles.forEach(t => { t.checked = false; t.disabled = true; });
+      if (metaStatus) metaStatus.textContent = "Account Not Linked";
+      if (metaConnectBtn) metaConnectBtn.style.display = "block";
+    } else {
+      metaCard.classList.remove('disabled');
+      subToggles.forEach(t => { t.disabled = false; });
+      if (metaStatus) metaStatus.textContent = "Connected";
+      if (metaConnectBtn) metaConnectBtn.style.display = "none";
+    }
+  }
 }
 
 mediaInput.addEventListener('change', () => {
@@ -284,6 +313,7 @@ function applyMediaTypeRules() {
     const toggle = card.querySelector('.platform-toggle');
     if (key === 'tiktok' && !state.tiktokConnected) card.classList.add('disabled');
     else if (key === 'youtube' && !state.youtubeConnected) card.classList.add('disabled');
+    else if (key === 'meta' && !state.metaConnected) card.classList.add('disabled');
     else card.classList.remove('disabled');
   });
 }
@@ -356,8 +386,15 @@ async function startPosting(title, platforms) {
     rowMap[p] = row;
   });
 
+  const PUBLISH_ENDPOINTS = {
+    tiktok: '/api/test-publish/tiktok',
+    youtube: '/api/test-publish/youtube',
+    facebook: '/api/test-publish/facebook',
+    instagram: '/api/test-publish/instagram',
+  };
+
   for (const p of platforms) {
-    const endpoint = p === 'tiktok' ? '/api/test-publish/tiktok' : '/api/test-publish/youtube';
+    const endpoint = PUBLISH_ENDPOINTS[p];
     try {
       const response = await fetch(`${window.location.origin}${endpoint}`, {
         method: 'POST',
@@ -406,7 +443,8 @@ function resetNewPostForm() {
 }
 
 function platformLabel(key) {
-  return key === 'tiktok' ? 'TikTok' : key === 'youtube' ? 'YouTube' : key;
+  const labels = { tiktok: 'TikTok', youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram' };
+  return labels[key] || key;
 }
 
 function escHtml(str) {
@@ -416,7 +454,7 @@ function escHtml(str) {
 (async function initApp() {
   await checkPlatformConnections();
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('tiktok_connected') === 'true' || urlParams.get('youtube_connected') === 'true') {
+  if (urlParams.get('tiktok_connected') === 'true' || urlParams.get('youtube_connected') === 'true' || urlParams.get('meta_connected') === 'true') {
     state.loggedIn = true;
     await updateDashboard();
     switchScreen('screen-dashboard');
