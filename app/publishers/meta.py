@@ -112,6 +112,36 @@ class InstagramPublisher(BasePublisher):
             return {"status": "failed", "error": "Missing Meta access token."}
         if not image_url:
             return {"status": "failed", "error": "Instagram requires a public image_url."}
+
+    # Auto-correct aspect ratio to 1:1 (square) before sending.
+    # Instagram accepts 4:5 to 1.91:1 — square (1:1) is always safe
+    # and works universally for ministry content.
+    try:
+        from PIL import Image
+        import shutil
+
+        base, ext = os.path.splitext(image_path)
+        corrected_path = f"{base}_ig{ext}"
+
+        with Image.open(image_path) as img:
+            w, h = img.size
+            ratio = w / h
+            # Only correct if outside Instagram's accepted range
+            if ratio < 0.8 or ratio > 1.91:
+                size = min(w, h)
+                left = (w - size) // 2
+                top = (h - size) // 2
+                img = img.crop((left, top, left + size, top + size))
+            img.save(corrected_path)
+
+        # Swap the URL to point at the corrected file
+        image_url = image_url.replace(
+            os.path.basename(image_path),
+            os.path.basename(corrected_path)
+        )
+    except Exception as e:
+        pass  # If PIL fails, try with original and let Instagram decide
+    
         try:
             container_res = requests.post(
                 f"{GRAPH_BASE}/{self.ig_business_id}/media",
