@@ -310,7 +310,7 @@ async def setup_meta_token(request: Request):
     Body: { "short_lived_token": "...", "page_id": "...", "ig_business_id": "..." }
     """
     body = await request.json()
-    short_lived_token = body.get("EAATpocqHKC8BR1ltnb8UJlOoPNGWyJZAh3O1E81inCiVROHYrAyoLyr9SqZBJ4jW9aV6DhQSnZBWV70tQrZAPNiGVa0Xb871wbdBtO7lC2gtKdstKBjwF3eSpH49cTkzD1QJG5JZBbAUPioE7dOA5txEs63ZA9D3XTCJwJPKqgwD3YzHOfMHlMDtavqZBTRyiKW3cQ71UQ9UZA947hjnFmoCwRbd6U4tEwF6ajMKApBZAMdsZD")
+    short_lived_token = body.get("short_lived_token")
     if not short_lived_token:
         return JSONResponse(status_code=400, content={"status": "failed", "error": "Missing short_lived_token."})
 
@@ -435,6 +435,20 @@ async def test_facebook_publish(request: Request):
     if result.get("status") == "success":
         return JSONResponse(content=result)
     return JSONResponse(status_code=500, content=result)
+
+@app.get("/api/debug/meta-token")
+async def debug_meta_token():
+    import requests
+    stored = await asyncio.to_thread(db.get_token, "meta")
+    if not stored or not stored.access_token:
+        return JSONResponse(content={"error": "No token in DB"})
+    # Ask Meta who this token belongs to
+    res = requests.get(
+        "https://graph.facebook.com/v19.0/me",
+        params={"fields": "id,name", "access_token": stored.access_token},
+        timeout=10
+    )
+    return JSONResponse(content=res.json())
 
 
 # ===================================================
