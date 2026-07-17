@@ -7,12 +7,13 @@ import os
 import httpx
 import asyncio
 from dotenv import load_dotenv
+load_dotenv()
 from app.publishers.tiktok import TikTokPublisher
 from app.publishers.youtube import YouTubePublisher
 from app.publishers.meta import InstagramPublisher, FacebookPublisher, exchange_for_long_lived_token
 from app import db
 
-load_dotenv()
+
 
 # Single source of truth for the public backend URL — was previously
 # hardcoded in 6+ different places, which is exactly the kind of thing
