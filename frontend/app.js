@@ -319,10 +319,6 @@ function applyMediaTypeRules() {
 }
 
 function getSelectedPlatforms() {
-  // BUG FIX 9: checkboxes use data-key="tiktok"/"youtube" in the HTML, not data-platform,
-  // and an unset checkbox .value defaults to "on" — so this was always returning
-  // ["on","on"] instead of ["tiktok","youtube"], causing everything to fall into
-  // the "else = youtube" branch downstream.
   return Array.from(platformToggles).filter(t => t.checked).map(t => t.dataset.key);
 }
 
@@ -339,18 +335,22 @@ async function handlePostNow() {
   switchScreen('screen-posting');
 
   if (postingLoader) postingLoader.removeAttribute('hidden');
-  // BUG FIX 13: bring back the audio-specific status message that used to show
-  // while the audio was being converted into a video before upload.
+
   if (postingTitleDisplay) {
-    postingTitleDisplay.textContent = state.mediaType === 'audio'
-      ? 'Converting audio to video...'
-      : 'Uploading operational media assets...';
+    if (state.mediaType === 'audio') {
+      postingTitleDisplay.textContent = 'Converting audio to video...';
+    } else if (state.mediaType === 'photo') {
+      postingTitleDisplay.textContent = 'Uploading operational photo assets...';
+    } else {
+      postingTitleDisplay.textContent = 'Uploading operational media assets...';
+    }
   }
 
   const formData = new FormData();
   formData.append('file', state.mediaFile);
 
-  // Dynamic distribution route handling
+  // Since your backend uses /api/upload-video to handle storing both video and image raw files,
+  // we route them sequentially, keeping the upload designation clean.
   const endpoint = state.mediaType === 'audio' ? '/api/upload-audio' : '/api/upload-video';
 
   try {
@@ -399,13 +399,11 @@ async function startPosting(title, platforms) {
       const response = await fetch(`${window.location.origin}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // BUG FIX 10: send the user's actual title/caption so the backend doesn't
-        // fall back to its hardcoded default text.
         body: JSON.stringify({
           "video_file": title,
           "title": postTitle.value.trim(),
           "description": postCaption.value.trim(),
-           "media_type": state.mediaType
+          "media_type": state.mediaType
         })
       });
       const result = await response.json();
