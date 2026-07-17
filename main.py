@@ -310,7 +310,7 @@ async def setup_meta_token(request: Request):
     Body: { "short_lived_token": "...", "page_id": "...", "ig_business_id": "..." }
     """
     body = await request.json()
-    short_lived_token = body.get("short_lived_token")
+    short_lived_token = body.get("short_lived_token":"EAATpocqHKC8BR1ltnb8UJlOoPNGWyJZAh3O1E81inCiVROHYrAyoLyr9SqZBJ4jW9aV6DhQSnZBWV70tQrZAPNiGVa0Xb871wbdBtO7lC2gtKdstKBjwF3eSpH49cTkzD1QJG5JZBbAUPioE7dOA5txEs63ZA9D3XTCJwJPKqgwD3YzHOfMHlMDtavqZBTRyiKW3cQ71UQ9UZA947hjnFmoCwRbd6U4tEwF6ajMKApBZAMdsZD")
     if not short_lived_token:
         return JSONResponse(status_code=400, content={"status": "failed", "error": "Missing short_lived_token."})
 
