@@ -404,7 +404,8 @@ async function startPosting(title, platforms) {
         body: JSON.stringify({
           "video_file": title,
           "title": postTitle.value.trim(),
-          "description": postCaption.value.trim()
+          "description": postCaption.value.trim(),
+           "media_type": state.mediaType
         })
       });
       const result = await response.json();

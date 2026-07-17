@@ -105,6 +105,37 @@ class InstagramPublisher(BasePublisher):
         except Exception as e:
             return {"status": "failed", "error": str(e)}
 
+    def publish_photo(self, image_path: str, caption: str, **kwargs) -> dict:
+        access_token = kwargs.get("access_token")
+        image_url = kwargs.get("image_url")
+        if not access_token:
+            return {"status": "failed", "error": "Missing Meta access token."}
+        if not image_url:
+            return {"status": "failed", "error": "Instagram requires a public image_url."}
+        try:
+            container_res = requests.post(
+                f"{GRAPH_BASE}/{self.ig_business_id}/media",
+                data={
+                    "image_url": image_url,
+                    "caption": caption,
+                    "access_token": access_token,
+                },
+                timeout=30,
+            )
+            container_data = container_res.json()
+            if "id" not in container_data:
+                return {"status": "failed", "error": f"Container creation failed: {container_data}"}
+            publish_res = requests.post(
+                f"{GRAPH_BASE}/{self.ig_business_id}/media_publish",
+                data={"creation_id": container_data["id"], "access_token": access_token},
+                timeout=30,
+            )
+            publish_data = publish_res.json()
+            if "id" not in publish_data:
+                return {"status": "failed", "error": f"Publish failed: {publish_data}"}
+            return {"status": "success", "platform": "instagram", "publish_id": publish_data["id"]}
+        except Exception as e:
+            return {"status": "failed", "error": str(e)}
 
 class FacebookPublisher(BasePublisher):
     def __init__(self):
@@ -135,6 +166,30 @@ class FacebookPublisher(BasePublisher):
             data = res.json()
             if "id" not in data:
                 return {"status": "failed", "error": f"Facebook upload failed: {data}"}
+            return {"status": "success", "platform": "facebook", "publish_id": data["id"]}
+        except Exception as e:
+            return {"status": "failed", "error": str(e)}
+
+    def publish_photo(self, image_path: str, caption: str, **kwargs) -> dict:
+        access_token = kwargs.get("access_token")
+        if not access_token:
+            return {"status": "failed", "error": "Missing Meta access token."}
+        if not os.path.exists(image_path):
+            return {"status": "failed", "error": f"Image file not found: {image_path}"}
+        try:
+            with open(image_path, "rb") as f:
+                res = requests.post(
+                    f"{GRAPH_BASE}/{self.page_id}/photos",
+                    data={
+                        "caption": caption,
+                        "access_token": access_token,
+                    },
+                    files={"source": f},
+                    timeout=(10, 120),
+                )
+            data = res.json()
+            if "id" not in data:
+                return {"status": "failed", "error": f"Facebook photo upload failed: {data}"}
             return {"status": "success", "platform": "facebook", "publish_id": data["id"]}
         except Exception as e:
             return {"status": "failed", "error": str(e)}

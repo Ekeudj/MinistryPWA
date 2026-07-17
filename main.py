@@ -339,29 +339,35 @@ async def test_instagram_publish(request: Request):
     stored_token = await asyncio.to_thread(db.get_token, "meta")
     access_token = stored_token.access_token if stored_token else None
     if not access_token:
-        return JSONResponse(status_code=400, content={"status": "failed", "error": "No active Meta token found. Run /api/setup/meta first."})
+        return JSONResponse(status_code=400, content={"status": "failed", "error": "No active Meta token found."})
 
     body = await request.json()
-    video_target = body.get("video_file", "test.mp4")
+    video_target = body.get("video_file", "")
     title = body.get("title") or "Ministry Sermon Clip"
     description = body.get("description", "")
+    media_type = body.get("media_type", "video")  # frontend must send this
 
-    # NOTE: Instagram's API requires a public video_url, not a raw uploaded
-    # file like TikTok/YouTube/Facebook accept — so instead of asking the
-    # frontend to know/construct that URL, resolve the file the same way
-    # every other publisher does (handles the audio->_render.mp4 case too)
-    # and build the public URL from the /uploads static mount ourselves.
     resolved_path = resolve_video_path(video_target)
     if not resolved_path:
-        return JSONResponse(status_code=404, content={"status": "failed", "error": f"Media target file '{video_target}' not found on server."})
-    video_url = f"{PUBLIC_BASE_URL}/uploads/{os.path.basename(resolved_path)}"
+        return JSONResponse(status_code=404, content={"status": "failed", "error": f"File '{video_target}' not found."})
 
+    public_url = f"{PUBLIC_BASE_URL}/uploads/{os.path.basename(resolved_path)}"
     publisher = InstagramPublisher()
-    result = await asyncio.to_thread(
-        publisher.publish_video, "", title, description, access_token=access_token, video_url=video_url
-    )
+
+    if media_type == "photo":
+        result = await asyncio.to_thread(
+            publisher.publish_photo, resolved_path, description or title,
+            access_token=access_token, image_url=public_url
+        )
+    else:
+        result = await asyncio.to_thread(
+            publisher.publish_video, "", title, description,
+            access_token=access_token, video_url=public_url
+        )
+
     await asyncio.to_thread(
-        db.save_post, title, "video", ["instagram"], "success" if result.get("status") == "success" else "failed"
+        db.save_post, title, media_type, ["instagram"],
+        "success" if result.get("status") == "success" else "failed"
     )
     if result.get("status") == "success":
         return JSONResponse(content=result)
@@ -370,6 +376,41 @@ async def test_instagram_publish(request: Request):
 
 @app.post("/api/test-publish/facebook")
 async def test_facebook_publish(request: Request):
+    stored_token = await asyncio.to_thread(db.get_token, "meta")
+    access_token = stored_token.access_token if stored_token else None
+    if not access_token:
+        return JSONResponse(status_code=400, content={"status": "failed", "error": "No active Meta token found."})
+
+    body = await request.json()
+    video_target = body.get("video_file", "")
+    title = body.get("title") or "Ministry Sermon Clip"
+    description = body.get("description", "")
+    media_type = body.get("media_type", "video")  # frontend must send this
+
+    video_file_path = resolve_video_path(video_target)
+    if not video_file_path:
+        return JSONResponse(status_code=404, content={"status": "failed", "error": f"File '{video_target}' not found."})
+
+    publisher = FacebookPublisher()
+
+    if media_type == "photo":
+        result = await asyncio.to_thread(
+            publisher.publish_photo, video_file_path, description or title,
+            access_token=access_token
+        )
+    else:
+        result = await asyncio.to_thread(
+            publisher.publish_video, video_file_path, title, description,
+            access_token=access_token
+        )
+
+    await asyncio.to_thread(
+        db.save_post, title, media_type, ["facebook"],
+        "success" if result.get("status") == "success" else "failed"
+    )
+    if result.get("status") == "success":
+        return JSONResponse(content=result)
+    return JSONResponse(status_code=500, content=result)
     stored_token = await asyncio.to_thread(db.get_token, "meta")
     access_token = stored_token.access_token if stored_token else None
     if not access_token:
