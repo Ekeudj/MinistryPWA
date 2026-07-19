@@ -70,9 +70,25 @@ async def serve_frontend():
         return FileResponse(frontend_path)
     return JSONResponse(status_code=500, content={"status": "error", "message": "Could not find frontend/index.html file locally."})
 
-# ===================================================
-# TIKTOK PIPELINE MODULE
-# ===================================================
+
+@app.post("/api/auth/login")
+async def login(request: Request):
+    """
+    Validates credentials against APP_EMAIL / APP_PASSWORD env vars.
+    Credentials never touch the frontend JS — the browser only ever
+    gets back a simple {ok, name} payload.
+    """
+    body = await request.json()
+    email = body.get("email", "").strip().lower()
+    password = body.get("password", "")
+
+    valid_email = os.getenv("APP_EMAIL", "").strip().lower()
+    valid_password = os.getenv("APP_PASSWORD", "")
+    display_name = os.getenv("APP_DISPLAY_NAME", "Pastor Mrs. Lubega")
+
+    if email == valid_email and password == valid_password:
+        return JSONResponse(content={"ok": True, "name": display_name})
+    return JSONResponse(status_code=401, content={"ok": False})
 
 @app.get("/api/auth/tiktok")
 async def tiktok_login():
@@ -411,44 +427,6 @@ async def test_facebook_publish(request: Request):
     if result.get("status") == "success":
         return JSONResponse(content=result)
     return JSONResponse(status_code=500, content=result)
-    stored_token = await asyncio.to_thread(db.get_token, "meta")
-    access_token = stored_token.access_token if stored_token else None
-    if not access_token:
-        return JSONResponse(status_code=400, content={"status": "failed", "error": "No active Meta token found. Run /api/setup/meta first."})
-
-    body = await request.json()
-    video_target = body.get("video_file", "test.mp4")
-    title = body.get("title") or "Ministry Sermon Clip"
-    description = body.get("description", "")
-
-    video_file_path = resolve_video_path(video_target)
-    if not video_file_path:
-        return JSONResponse(status_code=404, content={"status": "failed", "error": f"Media target file '{video_target}' not found on server."})
-
-    publisher = FacebookPublisher()
-    result = await asyncio.to_thread(
-        publisher.publish_video, video_file_path, title, description, access_token=access_token
-    )
-    await asyncio.to_thread(
-        db.save_post, title, "video", ["facebook"], "success" if result.get("status") == "success" else "failed"
-    )
-    if result.get("status") == "success":
-        return JSONResponse(content=result)
-    return JSONResponse(status_code=500, content=result)
-
-@app.get("/api/debug/meta-token")
-async def debug_meta_token():
-    import requests
-    stored = await asyncio.to_thread(db.get_token, "meta")
-    if not stored or not stored.access_token:
-        return JSONResponse(content={"error": "No token in DB"})
-    # Ask Meta who this token belongs to
-    res = requests.get(
-        "https://graph.facebook.com/v19.0/me",
-        params={"fields": "id,name", "access_token": stored.access_token},
-        timeout=10
-    )
-    return JSONResponse(content=res.json())
 
 
 # ===================================================
@@ -481,32 +459,23 @@ async def serve_service_worker():
 async def upload_sermon_audio(file: UploadFile = File(...)):
     try:
         upload_path = os.path.join(UPLOADS_DIR, file.filename)
-        os.makedirs(os.path.dirname(upload_path), exist_ok=True)
-        
+        # Stream to disk in 1MB chunks — avoids loading the whole file into
+        # RAM at once, which would crash Render's 512MB free-tier instance
+        # on large sermon recordings.
         with open(upload_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-            
+            while chunk := await file.read(1024 * 1024):
+                buffer.write(chunk)
+
         filename_without_ext = os.path.splitext(file.filename)[0]
         output_video_name = f"{filename_without_ext}_render.mp4"
-        
-        # BUG FIX 7: generate_sermon_video() runs ffmpeg/moviepy under the hood, which
-        # is slow and CPU-heavy. Calling it directly here blocked the whole async
-        # event loop until rendering finished — and while blocked, the devtunnel
-        # proxy would time the connection out, which is what threw the
-        # "Network processing failed" error in the browser.
-        # Same fix already applied to the YouTube publish flow (see run_youtube_upload) —
-        # just offload the blocking call to a worker thread with asyncio.to_thread.
+
         await asyncio.to_thread(
             generate_sermon_video,
             audio_path=upload_path,
             output_filename=output_video_name
         )
-        
-        return JSONResponse(content={
-            "status": "success",
-            "video_file": output_video_name
-        })
+
+        return JSONResponse(content={"status": "success", "video_file": output_video_name})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
@@ -514,12 +483,9 @@ async def upload_sermon_audio(file: UploadFile = File(...)):
 async def upload_sermon_video(file: UploadFile = File(...)):
     try:
         upload_path = os.path.join(UPLOADS_DIR, file.filename)
-        os.makedirs(os.path.dirname(upload_path), exist_ok=True)
-        
         with open(upload_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-            
+            while chunk := await file.read(1024 * 1024):
+                buffer.write(chunk)
         return JSONResponse(content={"status": "success", "video_file": file.filename})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})

@@ -1,11 +1,8 @@
 /**
- * HerGlory Media CMS — app_3.js
+ * HerGlory Media CMS
  */
 
 'use strict';
-
-const DEMO_EMAIL = 'admin@herglory.org';
-const DEMO_PASSWORD = 'glory2026';
 
 let state = {
   loggedIn: false,
@@ -94,21 +91,33 @@ async function handleLogin() {
   const email = inpEmail.value.trim();
   const pass = inpPass.value;
 
-  if (email === DEMO_EMAIL && pass === DEMO_PASSWORD) {
-    loginErr.setAttribute('hidden', '');
-    state.loggedIn = true;
-    state.user = { name: 'Pastor Mrs. Lubega', email };
-    if (topbarUser) topbarUser.textContent = state.user.name;
-    await updateDashboard();
-    switchScreen('screen-dashboard');
-    await checkPlatformConnections();
-  } else {
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      loginErr.setAttribute('hidden', '');
+      state.loggedIn = true;
+      state.user = { name: data.name, email };
+      sessionStorage.setItem('hg_user_name', data.name);
+      if (topbarUser) topbarUser.textContent = state.user.name;
+      await updateDashboard();
+      switchScreen('screen-dashboard');
+      await checkPlatformConnections();
+    } else {
+      loginErr.removeAttribute('hidden');
+      loginBtn.style.transform = 'translateX(-8px)';
+      setTimeout(() => { loginBtn.style.transform = 'translateX(8px)'; }, 80);
+      setTimeout(() => { loginBtn.style.transform = ''; }, 160);
+      inpPass.value = '';
+      inpPass.focus();
+    }
+  } catch (err) {
     loginErr.removeAttribute('hidden');
-    loginBtn.style.transform = 'translateX(-8px)';
-    setTimeout(() => { loginBtn.style.transform = 'translateX(8px)'; }, 80);
-    setTimeout(() => { loginBtn.style.transform = ''; }, 160);
     inpPass.value = '';
-    inpPass.focus();
   }
 }
 
@@ -178,6 +187,22 @@ navPostBtn.addEventListener('click', async () => {
   switchScreen('screen-newpost');
   await checkPlatformConnections();
 });
+
+// Dashboard button from the Post screen (bottom nav)
+if (navDashFromPost) {
+  navDashFromPost.addEventListener('click', () => {
+    updateDashboard();
+    switchScreen('screen-dashboard');
+  });
+}
+
+// Back button on the Post screen header
+if (backFromPost) {
+  backFromPost.addEventListener('click', () => {
+    updateDashboard();
+    switchScreen('screen-dashboard');
+  });
+}
 
 async function checkPlatformConnections() {
   // TikTok Connection Card
@@ -393,7 +418,10 @@ async function startPosting(title, platforms) {
     instagram: '/api/test-publish/instagram',
   };
 
-  for (const p of platforms) {
+  // Run all platform uploads in parallel — Instagram's container polling
+  // takes up to 60s, so sequential would make Facebook wait on Instagram.
+  // Promise.allSettled means one failure never blocks the others.
+  const publishPromises = platforms.map(async p => {
     const endpoint = PUBLISH_ENDPOINTS[p];
     try {
       const response = await fetch(`${window.location.origin}${endpoint}`, {
@@ -406,7 +434,6 @@ async function startPosting(title, platforms) {
           "media_type": state.mediaType
         })
       });
-      const result = await response.json();
       if (response.ok) {
         rowMap[p].querySelector('.posting-status').textContent = '✓ Success';
       } else {
@@ -415,7 +442,9 @@ async function startPosting(title, platforms) {
     } catch (e) {
       rowMap[p].querySelector('.posting-status').textContent = '✕ Network Error';
     }
-  }
+  });
+
+  await Promise.allSettled(publishPromises);
 
   if (postingLoader) postingLoader.setAttribute('hidden', '');
   if (postingDone) postingDone.removeAttribute('hidden');
@@ -453,8 +482,15 @@ function escHtml(str) {
 (async function initApp() {
   await checkPlatformConnections();
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('tiktok_connected') === 'true' || urlParams.get('youtube_connected') === 'true' || urlParams.get('meta_connected') === 'true') {
+  const oauthReturn = urlParams.get('tiktok_connected') === 'true' ||
+                      urlParams.get('youtube_connected') === 'true' ||
+                      urlParams.get('meta_connected') === 'true';
+  if (oauthReturn) {
+    // After OAuth redirect the user is already authenticated — restore session
+    const savedName = sessionStorage.getItem('hg_user_name') || 'Pastor Mrs. Lubega';
     state.loggedIn = true;
+    state.user = { name: savedName };
+    if (topbarUser) topbarUser.textContent = savedName;
     await updateDashboard();
     switchScreen('screen-dashboard');
     window.history.replaceState({}, document.title, window.location.pathname);
