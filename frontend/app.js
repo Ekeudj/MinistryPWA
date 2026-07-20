@@ -90,7 +90,7 @@ const loginFormEls = () => [
   document.getElementById('login-err'),
   document.getElementById('login-btn'),
   document.querySelector('.login-hint'),
-  ...document.querySelectorAll('#screen-login .field'),
+  ...document.querySelectorAll('#screen-login > .login-container > .login-card > .field'),
 ];
 
 goChangePassword.addEventListener('click', (e) => {
