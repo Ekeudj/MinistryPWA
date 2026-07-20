@@ -14,10 +14,6 @@ from app.publishers.meta import InstagramPublisher, FacebookPublisher, exchange_
 from app import db
 
 
-
-# Single source of truth for the public backend URL — was previously
-# hardcoded in 6+ different places, which is exactly the kind of thing
-# that causes a silent bug the day the domain changes.
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://herglory-backend.onrender.com")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
@@ -29,73 +25,96 @@ app = FastAPI(
     description="Scalable automation backend for cross-posting ministry content."
 )
 
-# BUG FIX 14: tokens used to live in a plain RAM dict, which meant every
-# Render restart/redeploy wiped them and forced a full reconnect. Now backed
-# by a Supabase Postgres table (see app/db.py) via db.get_token/save_token,
-# so they survive restarts. init_db() creates the tables on first run.
 db.init_db()
 
 app.mount("/static", StaticFiles(directory="frontend"), name="frontend_assets")
-# Instagram's API can't accept a raw uploaded file like TikTok/YouTube/Facebook
-# do — it needs a public URL it can fetch the video from. Serving /uploads
-# statically gives every rendered file a public URL for free.
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 def resolve_video_path(video_file: str):
-    """
-    Shared "find the actual file on disk" logic used by every publisher
-    endpoint (tiktok/youtube/facebook/instagram). Handles the case where the
-    frontend passes the original audio filename but the file that actually
-    exists is the *_render.mp4 produced by generate_sermon_video().
-    Returns an absolute path, or None if nothing matches.
-    """
     candidate = os.path.join(UPLOADS_DIR, video_file)
     if os.path.exists(candidate):
         return candidate
-
     rendered = os.path.join(UPLOADS_DIR, f"{os.path.splitext(video_file)[0]}_render.mp4")
     if os.path.exists(rendered):
         return rendered
-
     if os.path.exists(video_file):
         return video_file
-
     return None
+
+
+# ===================================================
+# FRONTEND
+# ===================================================
 
 @app.get("/")
 async def serve_frontend():
-    frontend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "index.html")
+    frontend_path = os.path.join(BASE_DIR, "frontend", "index.html")
     if os.path.exists(frontend_path):
         return FileResponse(frontend_path)
-    return JSONResponse(status_code=500, content={"status": "error", "message": "Could not find frontend/index.html file locally."})
+    return JSONResponse(status_code=500, content={"status": "error", "message": "Could not find frontend/index.html."})
 
+
+# ===================================================
+# APP AUTH  (login + password management)
+# ===================================================
 
 @app.post("/api/auth/login")
 async def login(request: Request):
     """
-    Validates credentials against APP_EMAIL / APP_PASSWORD env vars.
-    Credentials never touch the frontend JS — the browser only ever
-    gets back a simple {ok, name} payload.
+    Checks credentials. Password is read from the DB first (so changes
+    take effect immediately without a redeploy), falling back to the
+    APP_PASSWORD env var on first use before she has ever changed it.
     """
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
 
     valid_email = os.getenv("APP_EMAIL", "").strip().lower()
-    valid_password = os.getenv("APP_PASSWORD", "")
     display_name = os.getenv("APP_DISPLAY_NAME", "Pastor Mrs. Lubega")
+
+    # DB password wins if set; env var is the fallback for first-time use
+    stored_pw = await asyncio.to_thread(db.get_app_password)
+    valid_password = stored_pw if stored_pw else os.getenv("APP_PASSWORD", "")
 
     if email == valid_email and password == valid_password:
         return JSONResponse(content={"ok": True, "name": display_name})
     return JSONResponse(status_code=401, content={"ok": False})
+
+
+@app.post("/api/auth/change-password")
+async def change_password(request: Request):
+    """
+    Lets the client change the app password from the login screen.
+    Verifies the current password first, then stores the new one in the DB.
+    No redeploy needed — takes effect on the next login attempt.
+    """
+    body = await request.json()
+    current = body.get("current_password", "")
+    new_pw = body.get("new_password", "")
+
+    if not new_pw or len(new_pw) < 6:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Password must be at least 6 characters."})
+
+    stored_pw = await asyncio.to_thread(db.get_app_password)
+    valid_password = stored_pw if stored_pw else os.getenv("APP_PASSWORD", "")
+
+    if current != valid_password:
+        return JSONResponse(status_code=401, content={"ok": False, "error": "Incorrect current password."})
+
+    await asyncio.to_thread(db.save_app_password, new_pw)
+    return JSONResponse(content={"ok": True})
+
+
+# ===================================================
+# TIKTOK PIPELINE MODULE
+# ===================================================
 
 @app.get("/api/auth/tiktok")
 async def tiktok_login():
     client_key = os.getenv("TIKTOK_CLIENT_KEY")
     redirect_uri = f"{PUBLIC_BASE_URL}/api/callback/tiktok"
     scope = "user.info.basic,video.upload"
-    
     auth_url = (
         f"https://www.tiktok.com/v2/auth/authorize/"
         f"?client_key={client_key}"
@@ -149,12 +168,10 @@ async def test_tiktok_publish(request: Request):
     token = stored_token.access_token if stored_token else None
     if not token:
         return JSONResponse(status_code=400, content={"status": "failed", "error": "No active TikTok token found."})
-        
-    # BUG FIX 5: Extract the actual uploaded video file path dynamically instead of hardcoding test.mp4
+
     try:
         body = await request.json()
         video_target = body.get("video_file", "test.mp4")
-        # BUG FIX 10: use whatever title/description the user typed, fall back to defaults only if missing
         post_title = body.get("title") or "Ministry Live Sermon Clip"
         post_description = body.get("description") or "Automated cross-posting platform delivery."
     except Exception:
@@ -174,9 +191,6 @@ async def test_tiktok_publish(request: Request):
         access_token=token
     )
 
-    # BUG FIX 15: record post history in the DB (for the "recent posts" dashboard
-    # feature) instead of only relying on the frontend's in-memory state, which
-    # was lost on every page refresh.
     await asyncio.to_thread(
         db.save_post, post_title, "video", ["tiktok"],
         "success" if result.get("status") == "success" else "failed"
@@ -195,7 +209,6 @@ async def test_tiktok_publish(request: Request):
 def youtube_auth_login():
     redirect_uri = f"{PUBLIC_BASE_URL}/api/callback/youtube"
     client_id = os.getenv("YOUTUBE_CLIENT_KEY")
-    
     google_oauth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={client_id}&"
@@ -218,7 +231,6 @@ async def youtube_oauth_callback(code: str = Query(None)):
 
     redirect_uri = f"{PUBLIC_BASE_URL}/api/callback/youtube"
     token_url = "https://oauth2.googleapis.com/token"
-    
     payload = {
         "code": code,
         "client_id": os.getenv("YOUTUBE_CLIENT_KEY"),
@@ -230,13 +242,11 @@ async def youtube_oauth_callback(code: str = Query(None)):
     try:
         async with httpx.AsyncClient() as client:
             token_res = await client.post(token_url, data=payload, timeout=15.0)
-            
         if token_res.status_code == 200:
             tokens = token_res.json()
             await asyncio.to_thread(
                 db.save_token, "youtube", tokens.get("access_token"), tokens.get("refresh_token")
             )
-            # BUG FIX 1: Use standard clear response instead of keeping the PWA locked in an auth loop state
             return RedirectResponse(url=f"{PUBLIC_BASE_URL}/?youtube_connected=true")
     except Exception as e:
         print(f"[YouTube Callback Exception]: {str(e)}")
@@ -244,7 +254,6 @@ async def youtube_oauth_callback(code: str = Query(None)):
     return RedirectResponse(url=f"{PUBLIC_BASE_URL}/?youtube_connected=false")
 
 
-# BUG FIX 2: Run blocking requests executor in a separate operational worker thread
 def run_youtube_upload(video_path: str, access_token: str, title: str, description: str):
     try:
         publisher = YouTubePublisher()
@@ -254,8 +263,6 @@ def run_youtube_upload(video_path: str, access_token: str, title: str, descripti
             description=description,
             access_token=access_token
         )
-        # This function already runs in its own worker thread (via BackgroundTasks),
-        # so a plain blocking db call here is fine — no asyncio.to_thread needed.
         db.save_post(title, "video", ["youtube"], "success" if result.get("status") == "success" else "failed")
     except Exception as e:
         print(f"[YouTube Worker Thread Crash]: {str(e)}")
@@ -271,7 +278,6 @@ async def production_publish_youtube(request: Request, background_tasks: Backgro
     try:
         body = await request.json()
         video_file_path = body.get("video_file", "test.mp4")
-        # BUG FIX 10: use whatever title/description the user typed, fall back to defaults only if missing
         post_title = body.get("title") or "Pastor Mrs. Lubega Live Sermon Clip"
         post_description = body.get("description") or "Powerful spiritual insight for today. #shorts #faith"
     except Exception:
@@ -284,9 +290,9 @@ async def production_publish_youtube(request: Request, background_tasks: Backgro
         return JSONResponse(status_code=404, content={"status": "failed", "error": f"Missing operational source file content: '{video_file_path}'"})
     video_file_path = resolved_path
 
-    # Offload execution safely to background threads
     background_tasks.add_task(run_youtube_upload, video_file_path, access_token, post_title, post_description)
     return JSONResponse(status_code=202, content={"status": "processing", "message": "Video upload dispatched to system background workers successfully!"})
+
 
 # ===================================================
 # META (INSTAGRAM + FACEBOOK) PIPELINE MODULE
@@ -294,37 +300,16 @@ async def production_publish_youtube(request: Request, background_tasks: Backgro
 
 @app.get("/api/auth/meta")
 async def meta_connect():
-    """
-    "Connect Account" endpoint for the Meta card — mirrors the tiktok/youtube
-    connect UX (click link -> land back on the dashboard connected), instead
-    of the old flow where you had to know to POST to /api/setup/meta.
-
-    Meta doesn't give a small ministry app a quick user-login OAuth dance the
-    way TikTok/YouTube do (Instagram content-publishing permissions require
-    Facebook App Review + Business Verification). So this endpoint takes the
-    long-lived Page token you already generate manually via Graph API
-    Explorer (LONG_LIVED_TOKEN in .env, valid ~60 days) and stores it in the
-    database. Re-hitting this link after refreshing that env var is how you
-    "reconnect" once the 60 days are up.
-    """
     long_lived_token = os.getenv("LONG_LIVED_TOKEN")
     page_id = os.getenv("META_PAGE_ID")
-
     if not long_lived_token:
         return RedirectResponse(url=f"{PUBLIC_BASE_URL}/?meta_connected=false")
-
     await asyncio.to_thread(db.save_token, "meta", long_lived_token, extra_id=page_id)
     return RedirectResponse(url=f"{PUBLIC_BASE_URL}/?meta_connected=true")
 
 
 @app.post("/api/setup/meta")
 async def setup_meta_token(request: Request):
-    """
-    Fallback/manual endpoint for exchanging a fresh short-lived Graph API
-    Explorer token for a long-lived one yourself, if you'd rather not manage
-    LONG_LIVED_TOKEN in .env by hand. Not used by the "Connect Account" link.
-    Body: { "short_lived_token": "...", "page_id": "...", "ig_business_id": "..." }
-    """
     body = await request.json()
     short_lived_token = body.get("short_lived_token")
     if not short_lived_token:
@@ -335,9 +320,6 @@ async def setup_meta_token(request: Request):
         long_lived_token = exchanged.get("access_token")
         if not long_lived_token:
             return JSONResponse(status_code=500, content={"status": "failed", "error": f"Exchange failed: {exchanged}"})
-
-        # Store once — both Instagram and Facebook publishing use the same
-        # Page-linked token, so one row covers both.
         await asyncio.to_thread(db.save_token, "meta", long_lived_token, extra_id=body.get("page_id"))
         return JSONResponse(content={"status": "success", "message": "Long-lived Meta token stored successfully.", "expires_in": exchanged.get("expires_in")})
     except Exception as e:
@@ -361,7 +343,7 @@ async def test_instagram_publish(request: Request):
     video_target = body.get("video_file", "")
     title = body.get("title") or "Ministry Sermon Clip"
     description = body.get("description", "")
-    media_type = body.get("media_type", "video")  # frontend must send this
+    media_type = body.get("media_type", "video")
 
     resolved_path = resolve_video_path(video_target)
     if not resolved_path:
@@ -401,7 +383,7 @@ async def test_facebook_publish(request: Request):
     video_target = body.get("video_file", "")
     title = body.get("title") or "Ministry Sermon Clip"
     description = body.get("description", "")
-    media_type = body.get("media_type", "video")  # frontend must send this
+    media_type = body.get("media_type", "video")
 
     video_file_path = resolve_video_path(video_target)
     if not video_file_path:
@@ -430,7 +412,7 @@ async def test_facebook_publish(request: Request):
 
 
 # ===================================================
-# POST HISTORY (for the "recent posts" dashboard list)
+# POST HISTORY
 # ===================================================
 
 @app.get("/api/posts")
@@ -459,9 +441,6 @@ async def serve_service_worker():
 async def upload_sermon_audio(file: UploadFile = File(...)):
     try:
         upload_path = os.path.join(UPLOADS_DIR, file.filename)
-        # Stream to disk in 1MB chunks — avoids loading the whole file into
-        # RAM at once, which would crash Render's 512MB free-tier instance
-        # on large sermon recordings.
         with open(upload_path, "wb") as buffer:
             while chunk := await file.read(1024 * 1024):
                 buffer.write(chunk)

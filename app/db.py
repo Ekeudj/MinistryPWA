@@ -1,13 +1,5 @@
 """
 app/db.py
-
-One shared database module used by everything else in the app.
-Replaces the old RAM dicts (TIKTOK_TOKENS / YOUTUBE_TOKENS) with a real
-Supabase Postgres table, so tokens survive Render restarts/redeploys.
-
-Uses SQLModel (an ORM on top of SQLAlchemy) so we never write raw SQL.
-A connection POOL is created once at import time and reused for every
-request — we never open/close a single long-lived connection by hand.
 """
 
 import os
@@ -15,12 +7,7 @@ from datetime import datetime
 from typing import Optional
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 
-# Paste your Supabase "Transaction pooler" connection string into .env as
-# SUPABASE_DB_URL (with your real DB password swapped into the placeholder).
 DATABASE_URL = os.getenv("SUPABASE_DB_URL")
-
-# pool_pre_ping checks a connection is still alive before using it — avoids
-# "connection closed" errors after the DB has been idle for a while.
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, echo=False)
 
 
@@ -30,12 +17,9 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True, echo=False)
 
 class PlatformToken(SQLModel, table=True):
     __tablename__ = "platform_tokens"
-    # platform = "tiktok" / "youtube" / "instagram" / "facebook"
     platform: str = Field(primary_key=True)
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
-    # Optional stable IDs some platforms need alongside the token
-    # (e.g. Meta's Page ID / IG Business Account ID)
     extra_id: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -44,10 +28,21 @@ class Post(SQLModel, table=True):
     __tablename__ = "posts"
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str
-    media_type: str          # "audio" / "video" / "photo"
-    platforms: str           # comma-separated, e.g. "tiktok,youtube"
-    status: str               # "success" / "partial" / "failed"
+    media_type: str
+    platforms: str
+    status: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AppConfig(SQLModel, table=True):
+    """
+    General key/value config stored in the DB so settings like the app
+    password can be changed at runtime without a Render redeploy.
+    key="app_password" stores the current login password.
+    """
+    __tablename__ = "app_config"
+    key: str = Field(primary_key=True)
+    value: str
 
 
 def init_db():
@@ -56,7 +51,7 @@ def init_db():
 
 
 # ===================================================
-# TOKEN HELPERS  (replaces TIKTOK_TOKENS / YOUTUBE_TOKENS dicts)
+# TOKEN HELPERS
 # ===================================================
 
 def get_token(platform: str) -> Optional[PlatformToken]:
@@ -86,7 +81,7 @@ def save_token(platform: str, access_token: str, refresh_token: str = None, extr
 
 
 # ===================================================
-# POST HISTORY HELPERS  (for "recent posts" on the dashboard)
+# POST HISTORY HELPERS
 # ===================================================
 
 def save_post(title: str, media_type: str, platforms: list, status: str):
@@ -104,3 +99,30 @@ def list_recent_posts(limit: int = 20):
     with Session(engine) as session:
         statement = select(Post).order_by(Post.created_at.desc()).limit(limit)
         return session.exec(statement).all()
+
+
+# ===================================================
+# APP CONFIG HELPERS  (password management)
+# ===================================================
+
+def get_app_password() -> Optional[str]:
+    """
+    Returns the password stored in the DB, or None if it has never been
+    changed (in which case the caller should fall back to the APP_PASSWORD
+    env var as the initial password).
+    """
+    with Session(engine) as session:
+        row = session.get(AppConfig, "app_password")
+        return row.value if row else None
+
+
+def save_app_password(new_password: str):
+    """Upsert the app password into the DB."""
+    with Session(engine) as session:
+        existing = session.get(AppConfig, "app_password")
+        if existing:
+            existing.value = new_password
+            session.add(existing)
+        else:
+            session.add(AppConfig(key="app_password", value=new_password))
+        session.commit()

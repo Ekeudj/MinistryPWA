@@ -72,6 +72,81 @@ const postingLoader = document.getElementById('posting-loader');
 const postingDone = document.getElementById('posting-done');
 const goDashboardBtn = document.getElementById('go-dashboard-btn');
 
+// ── Change Password Flow ──────────────────────────────────────────────────
+const goChangePassword = document.getElementById('go-change-password');
+const changePasswordForm = document.getElementById('change-password-form');
+const backToLogin = document.getElementById('back-to-login');
+const cpSubmitBtn = document.getElementById('cp-submit-btn');
+const cpCurrent = document.getElementById('cp-current');
+const cpNew = document.getElementById('cp-new');
+const cpConfirm = document.getElementById('cp-confirm');
+const changePwErr = document.getElementById('change-pw-err');
+const changePwOk = document.getElementById('change-pw-ok');
+
+// Elements to hide when showing the change-password form
+const loginFormEls = () => [
+  document.querySelector('.login-heading'),
+  document.querySelector('.login-desc'),
+  document.getElementById('login-err'),
+  document.getElementById('login-btn'),
+  document.querySelector('.login-hint'),
+  ...document.querySelectorAll('#screen-login .field'),
+];
+
+goChangePassword.addEventListener('click', (e) => {
+  e.preventDefault();
+  loginFormEls().forEach(el => { if (el) el.style.display = 'none'; });
+  goChangePassword.style.display = 'none';
+  changePasswordForm.style.display = 'block';
+  changePwErr.setAttribute('hidden', '');
+  changePwOk.style.display = 'none';
+});
+
+backToLogin.addEventListener('click', (e) => {
+  e.preventDefault();
+  changePasswordForm.style.display = 'none';
+  loginFormEls().forEach(el => { if (el) el.style.display = ''; });
+  goChangePassword.style.display = 'block';
+  cpCurrent.value = ''; cpNew.value = ''; cpConfirm.value = '';
+  changePwErr.setAttribute('hidden', '');
+  changePwOk.style.display = 'none';
+});
+
+cpSubmitBtn.addEventListener('click', async () => {
+  changePwErr.setAttribute('hidden', '');
+  changePwOk.style.display = 'none';
+
+  if (!cpNew.value || cpNew.value.length < 6) {
+    changePwErr.textContent = 'New password must be at least 6 characters.';
+    changePwErr.removeAttribute('hidden');
+    return;
+  }
+  if (cpNew.value !== cpConfirm.value) {
+    changePwErr.textContent = 'New passwords do not match.';
+    changePwErr.removeAttribute('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: cpCurrent.value, new_password: cpNew.value })
+    });
+    if (res.ok) {
+      changePwOk.style.display = 'block';
+      cpCurrent.value = ''; cpNew.value = ''; cpConfirm.value = '';
+    } else {
+      changePwErr.textContent = 'Incorrect current password.';
+      changePwErr.removeAttribute('hidden');
+    }
+  } catch (e) {
+    changePwErr.textContent = 'Network error. Try again.';
+    changePwErr.removeAttribute('hidden');
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────
+
 function switchScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const target = document.getElementById(id);
